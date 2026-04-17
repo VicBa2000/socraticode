@@ -1,0 +1,41 @@
+{
+  "$schema": "./node_modules/opencode/config.schema.json",
+  "provider": {
+    "ollama": {
+      "id": "ollama",
+      "name": "Ollama",
+      "api": "openai-compatible",
+      "env": [],
+      "options": {
+        "baseURL": "http://localhost:11434/v1",
+        "apiKey": "ollama"
+      },
+      "models": {
+        "gemma4": {
+          "name": "Gemma 4 8B",
+          "limit": {
+            "context": 32000,
+            "output": 8000
+          },
+          "options": {}
+        },
+        "qwen3:4b": {
+          "name": "Qwen 3 4B",
+          "limit": {
+            "context": 32000,
+            "output": 8000
+          },
+          "options": {}
+        },
+        "llama3.2:3b": {
+          "name": "Llama 3.2 3B",
+          "limit": {
+            "context": 8000,
+            "output": 4000
+          },
+          "options": {}
+        }
+      }
+    }
+  }
+}

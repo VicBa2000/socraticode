@@ -1,0 +1,425 @@
+================================================================================
+  SOCRATICODE USER MANUAL - v1.0
+================================================================================
+
+SocraticCode is a fork of OpenCode that turns the coding agent into a
+socratic mentor: instead of writing the code for you, it teaches you to
+reason about it. The pedagogical rules live in code (not fragile prompts),
+so behavior is deterministic and consistent across compatible models.
+
+If you want finished code fast, use OpenCode. If you want to learn and
+have the mentor make you think, use SocraticCode.
+
+================================================================================
+  1. PHILOSOPHY
+================================================================================
+
+Universal rules that apply ALWAYS, at any level or mode:
+
+  1. Never confirms something incorrect, even if you insist.
+  2. If you paste a long/perfect/suspicious response, it asks you to
+     explain it in your own words.
+  3. Direct, respectful tone. Zero empty praise.
+  4. Before implementing anything, it asks what the goal is.
+  5. If it writes code, it makes sure you understand why each decision.
+  6. Never dumps all the code at once. One concept, one question, advance.
+
+================================================================================
+  2. THE 5 USER LEVELS
+================================================================================
+
+On first launch, SocraticCode asks your level. After that it adapts
+automatically based on how you answer. You can force it with /level.
+
+  LEVEL 1 - NOVICE (role: teacher)
+    - Explains every concept before using it
+    - Writes code WITH you, not FOR you
+    - Real verification question after each block
+    - Hints start at level 5 (full scaffolding)
+    - Accompaniment: 100%
+
+  LEVEL 2 - BASIC (role: guide)
+    - Assumes fundamentals, teaches context
+    - Explains the WHY of every decision
+    - Hints start at level 4 (explanation + verification)
+    - Accompaniment: 80%
+
+  LEVEL 3 - INTERMEDIATE (role: pair programmer)
+    - Asks your approach before writing
+    - Can show code with blanks (___) for you to complete
+    - Hints start at level 0 (pure socratic)
+    - Accompaniment: 50%
+
+  LEVEL 4 - ADVANCED (role: code reviewer)
+    - Does not explain basics, assumes competence
+    - Challenges architectural decisions
+    - Flags edge cases, security, scalability
+    - Accompaniment: 10%
+
+  LEVEL 5 - EXPERT (role: silent colleague)
+    - Works like a normal assistant
+    - Only intervenes on vulnerabilities or serious anti-patterns
+    - Accompaniment: 0%
+
+How the level changes automatically:
+  - 3+ incorrect answers in a row: LOWER one level
+  - 2+ "I don't know" signals: LOWER one level
+  - You ask to slow down: LOWER one level
+  - 3+ correct + you use technical vocabulary: RAISE one level
+  - 3+ correct + you propose a solution without help: RAISE one level
+  - If you paste code (copy-paste detected): BLOCKS upgrades
+
+================================================================================
+  3. THE 6 HINT LEVELS (0-5)
+================================================================================
+
+Orthogonal to the user level. Controls how much help the mentor gives.
+Escalates up on failure, de-escalates down on success.
+
+  0 - PURE SOCRATIC: questions only, zero hints
+  1 - ORIENTATION: points to the AREA of the problem without revealing
+  2 - ANALOGY: uses a real-world example
+  3 - REDUCTION: simplifies the problem to the minimum
+  4 - EXPLANATION + VERIFICATION: brief explanation + variant question
+  5 - SCAFFOLDING: 3-5 sentence micro-lesson + verification
+
+Escalation rules:
+  - 2 consecutive failures: rises 1 hint
+  - If you say "I don't know": jumps straight to level 5
+  - 1 correct from level 5: drops to level 3
+  - 1 correct from level 3: drops to level 1
+  - 1 correct from level 1: drops to level 0
+
+================================================================================
+  4. THE 2 MODES
+================================================================================
+
+  LEARN (default):
+    Priority: learn. More questions, more verifications, more time on
+    each concept. At level 3 uses gapped code (___).
+
+  PRODUCTIVE:
+    Priority: move forward. Fewer questions, direct code, verifications
+    only when something critical. At level 3 writes without blanks.
+
+Switch with: /mode learn  or  /mode productive
+
+================================================================================
+  5. FULL SLASH COMMAND LIST
+================================================================================
+
+LEVEL/MODE CONTROL
+  /level 1-5             Force level manually (lasts 5 sessions)
+  /level auto            Return to automatic adjustment
+  /mode learn            Learn mode
+  /mode productive       Productive mode (alias: /mode prod)
+
+IN-CONVERSATION HELP
+  /hint                  Request more help on the next turn
+  /slower  (/despacio)   Go slower
+  /faster  (/rapido)     Go faster
+  /challenge (/desafio)  Activate challenge mode: attack your code
+
+PEDAGOGICAL INFORMATION
+  /profile (/perfil)     Dialog with your full profile
+  /weakness (/debilidades)  Topics you're struggling with
+  /strengths (/fortalezas)  Topics you've mastered
+
+LEARNING JOURNAL
+  /journal               Last 7 days
+  /journal week          Weekly rollup
+  /journal month         Monthly rollup with ASCII chart
+
+FEYNMAN MODE (role reversal)
+  /teach <topic>         You explain, the agent probes
+  /endteach              Exit teach mode with a summary
+
+================================================================================
+  6. MEMORY: WHAT SOCRATICODE TRACKS
+================================================================================
+
+Everything is stored in SQLite at
+  ~/.local/share/socraticode/opencode-local.db
+  (Windows: %LOCALAPPDATA%\socraticode\)
+
+  PEDAGOGICAL PROFILE
+    - Global level + per-domain level (JS, SQL, Docker, etc.)
+    - Comprehension speed (EMA 0-1)
+    - Copy tendency (EMA 0-1)
+    - Total sessions, concepts learned, day streak
+
+  WEAKNESSES (error_map)
+    - Each topic you missed, with fail_count
+    - Last seen date, next scheduled review
+    - Marked resolved when you pass the review
+
+  STRENGTHS (strength)
+    - Topics you got right 2+ times
+    - Not forgotten, but not re-explained
+
+  DAILY JOURNAL
+    - learned / practiced / struggled per session
+    - Weekly and monthly rollups
+
+  PERSONAL ANTI-PATTERNS
+    - 5 detectable classes: loose equality (==), var in modern JS,
+      unhandled promises, array mutation in pure contexts, callback hell
+    - Activated after 3 occurrences, deactivated after 5 corrections
+    - When active, the mentor watches for them on every turn
+
+================================================================================
+  7. SPACED REPETITION (LEITNER)
+================================================================================
+
+Topics where you failed come back automatically following a memory curve:
+
+  fail_count 1 -> 1 day
+  fail_count 2 -> 3 days
+  fail_count 3 -> 7 days
+  fail_count 4+ -> 14 days
+
+At the start of a session, if a review is due, the mentor opens with a
+brief question. If you answer correctly, it's marked resolved. Max 1
+review per session to avoid nagging.
+
+================================================================================
+  8. PREREQUISITE ENFORCEMENT
+================================================================================
+
+If you ask about an advanced topic without having mastered the
+prerequisites, the mentor pauses and verifies the base first.
+
+Example: you ask "how do I use async/await" without "promises" marked
+as a strength. The mentor responds:
+
+  "Before we get into async/await, I need to verify that promises are
+   clear. Show me how you'd write a function that returns a promise
+   resolving to the double of a number."
+
+Once you prove it, it continues with the original topic.
+
+Skipped for levels 4-5 (they self-assess).
+
+================================================================================
+  9. RECOMMENDED MODELS
+================================================================================
+
+SocraticCode works with any cloud model. For local Ollama, the socratic
+layer has been validated at these thresholds:
+
+  MINIMUM VIABLE LOCAL: 4B (qwen3:4b)
+    - Responds coherently
+    - Tool calls via text-mode protocol
+
+  RECOMMENDED LOCAL: 8B (gemma4)
+    - Full socratic features
+    - Passes all benchmark probes
+
+  PREMIUM LOCAL: 32B+ (qwen2.5-coder:32b)
+    - Full socratic + native tool_calls
+    - Requires ~20GB of VRAM
+
+  CLOUD: any (Claude, GPT, Gemini, MiniMax, etc.)
+
+Models <=3B (llama3.2:3b, qwen2.5:3b, tinyllama, phi-3-mini) hallucinate
+under OpenCode's agent-prompt load and are NOT recommended, even if the
+benchmark passes them on isolated probes.
+
+================================================================================
+  10. BENCHMARK COMMAND
+================================================================================
+
+Before committing to a local model, test it:
+
+  socraticode benchmark ollama/qwen3:4b
+
+Runs 5 deterministic probes:
+  1. availability: does the endpoint respond?
+  2. instruction following: does it follow a strict instruction?
+  3. json: does it produce valid JSON?
+  4. tool-call: does it follow the text-mode <tool-call> protocol?
+  5. context recall: does it remember something 2 turns back?
+
+Reports latencies and gives a recommendation: STRONG / LITE / AVOID.
+
+Also shows your calculated context budget (how much room remains for
+history after system prompt + tool schemas + output reserve).
+
+================================================================================
+  11. COPY-PASTE DETECTION
+================================================================================
+
+When you paste code or an unusually long/sophisticated response,
+SocraticCode detects it through:
+  - Unusually long response length (>400 chars)
+  - Heavy markdown (many code blocks or bold numbered lists)
+  - Formal language like "in conclusion", "it is worth noting",
+    "furthermore", "moreover"
+  - Long code blocks at novice/basic level
+  - Sophisticated patterns (interface + extends + implements) from novices
+
+When detected, it injects a "deepening tactic":
+  - "Explain it in your own words"
+  - "Give me a different example where the same thing applies"
+  - "What would happen if we swapped X for Y?"
+  - etc.
+
+Copy tendency is updated via EMA alpha=0.1. If it crosses 0.5, every
+response comes with more probing by default.
+
+================================================================================
+  12. ANTI-ADULATION
+================================================================================
+
+User pressure (detects phrases like "just tell me", "stop asking
+questions", "at the grain", "solo dime", "al grano"):
+
+  NOVICE/BASIC: changes approach but doesn't cave. "I understand the
+    frustration. Let me explain it directly and then we'll verify."
+
+  INTERMEDIATE: 3-phase escalation.
+    1st pressure: "Let me rephrase more simply"
+    2nd pressure: "OK, I'll show you, but afterwards you explain"
+    3rd+ pressure: direct answer but with 1 verification question
+
+  ADVANCED/EXPERT: respects the request, answers directly without questions.
+
+================================================================================
+  13. FEYNMAN MODE (/teach)
+================================================================================
+
+Inverts the roles. You explain a topic, the agent plays a curious student
+and probes for gaps in your explanation.
+
+Student agent rules:
+  - Identifies 3-5 specific weaknesses per turn (vague phrases,
+    undefined terms, unjustified claims, missing edge cases)
+  - Asks ONE question per weakness. Short, direct.
+  - Does not accept hand-waving
+  - Does not explain the topic to you (you're the teacher)
+  - If your explanation is solid, pushes one level deeper
+
+Usage:
+  /teach closures         -> activates the mode
+  (you have 5-10 turns explaining)
+  /endteach               -> closes and returns a summary
+
+The best way to solidify a topic you think you already know.
+
+================================================================================
+  14. LEARNING JOURNAL
+================================================================================
+
+At the end of each session, SocraticCode automatically generates an entry
+with:
+  - learned: concepts you moved from weakness to strength
+  - practiced: topics you got right
+  - struggled: topics you missed
+
+  /journal          Last 7 days, one entry per day
+  /journal week     Weekly rollup with unique topics + avg comprehension
+  /journal month    Monthly rollup + ASCII chart of turns per day
+
+Useful for:
+  - Sharing learning evidence (show a teacher/mentor)
+  - Self-reflection (what do I practice most, what do I avoid)
+  - Spotting patterns (do I always get stuck on the same thing?)
+
+================================================================================
+  15. CONFIGURATION AND FILES
+================================================================================
+
+  ~/.config/socraticode/socraticode.json
+    Providers (Ollama Local, Ollama Cloud, Claude, etc.) and default model.
+    Edit with `socraticode setup` or by hand.
+
+  ~/.local/share/socraticode/opencode-local.db
+    SQLite with all tracking. Inspect with sqlite3.
+    9 socratic tables: profile, domain_level, interest, error_map,
+    strength, session, reasoning_step, journal, antipattern.
+
+  ~/.cache/socraticode/
+    Migration and artifact caches. Safe to delete.
+
+Relevant environment variables:
+  SOCRATICODE_FORCE_LITE=1     Force lite mode (short prompts, no HINT_META)
+  SOCRATICODE_FORCE_STRONG=1   Force strong mode (full prompts)
+  SOCRATICODE_DB=:memory:      In-memory DB (for testing)
+  SOCRATICODE_DB=/path.db      Custom DB
+
+================================================================================
+  16. TROUBLESHOOTING
+================================================================================
+
+"The local model takes 30-60 seconds on the first response"
+  Normal. Ollama loads the weights into VRAM the first time. SocraticCode
+  already sends a keep_alive=30min ping on startup to pre-warm.
+  If it persists, raise the prewarm timeout or manually preload:
+    curl http://localhost:11434/api/generate -d '{"model":"your-model","keep_alive":"30m"}'
+
+"The model responds off-topic mentioning 'todos', 'skill', 'github-triage'"
+  That's a 3B model (llama3.2:3b, qwen2.5:3b or similar) that can't handle
+  OpenCode's prompt. Upgrade to 4B+ (qwen3:4b recommended).
+
+"A cloud model throws 401"
+  Your API key expired or is invalid. Run `socraticode setup` again
+  or edit ~/.config/socraticode/socraticode.json.
+
+"I want to reset my profile and start over"
+  Delete the DB:
+    rm ~/.local/share/socraticode/opencode-local.db
+  (Windows: del %LOCALAPPDATA%\socraticode\opencode-local.db)
+  Re-opening triggers initial calibration.
+
+"I want to see exactly what's being saved"
+  sqlite3 ~/.local/share/socraticode/opencode-local.db
+  .tables
+  SELECT * FROM socratic_profile;
+
+"The TUI breaks when I use mouse wheel in VS Code terminal"
+  Not a bug, just a terminal limitation. Use arrow up/down with the
+  prompt empty to scroll (SocraticCode maps those keys).
+
+"The model doesn't emit [HINT_META]"
+  Only happens with 'lite' models (the reminder is intentionally
+  disabled for them). Strong models should emit it. If a strong one
+  doesn't, check the system prompt is being injected with
+  `bun run dev --log-level=DEBUG`.
+
+"I need a new domain / keyword / prerequisite"
+  Edit the corresponding JSON in packages/opencode/src/socratic/data/
+  without touching TypeScript. See CONTRIBUTING.md.
+
+================================================================================
+  17. KNOWN LIMITATIONS OF v1.0
+================================================================================
+
+  - Lite local models (qwen3:4b, etc.): they emit <tool-call> blocks but
+    real tool execution is NOT wired up yet (v1.1). For now you see the
+    model's intent but have to execute the tool yourself.
+
+  - Benchmark makes direct provider calls, doesn't go through OpenCode's
+    Effect layer. Behavior in session may differ slightly.
+
+  - Socratic regex detection is ES/EN. If you speak another language
+    (Portuguese, French, etc.) the zero-knowledge or pressure detectors
+    may miss. Contributions welcome in src/socratic/detector.ts.
+
+  - Feynman mode does not use the strengths DB — each /teach session is
+    independent. v1.1 planned: Feynman journal with feedback.
+
+================================================================================
+  18. RESOURCES
+================================================================================
+
+  README.md           Overview and diff table with OpenCode
+  CHANGELOG.md        Full v1.0 changelog
+  CONTRIBUTING.md     How to contribute (JSON data or code)
+  FAQ.md              Frequently asked questions
+  QUICKSTART.txt      Quick install steps
+
+  OpenCode:           https://github.com/anomalyco/opencode
+
+================================================================================
+  END OF MANUAL
+================================================================================

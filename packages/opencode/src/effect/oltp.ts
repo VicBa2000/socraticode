@@ -14,7 +14,7 @@ export namespace Observability {
     serviceVersion: VERSION,
     attributes: {
       "deployment.environment.name": CHANNEL === "local" ? "local" : CHANNEL,
-      "opencode.client": Flag.OPENCODE_CLIENT,
+      "opencode.client": Flag.SOCRATICODE_CLIENT,
     },
   }
 

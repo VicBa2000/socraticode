@@ -5,6 +5,7 @@ import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/dialog-model"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
+import { SocraticIntegration } from "@/socratic/integration"
 
 export function Footer() {
   const { theme } = useTheme()
@@ -82,6 +83,22 @@ export function Footer() {
                 {mcp()} MCP
               </text>
             </Show>
+            {(() => {
+              try {
+                const info = SocraticIntegration.getCurrentLevel("")
+                if (info) {
+                  return (
+                    <text fg={theme.text}>
+                      <span style={{ fg: theme.accent }}>{info.level}</span>-{info.name}{" "}
+                      <span style={{ fg: theme.textMuted }}>{info.mode === "learn" ? "learn" : "prod"}</span>
+                    </text>
+                  )
+                }
+                return null
+              } catch {
+                return null
+              }
+            })()}
             <text fg={theme.textMuted}>/status</text>
           </Match>
         </Switch>

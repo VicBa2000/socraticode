@@ -71,7 +71,7 @@ export namespace Command {
     readonly list: () => Effect.Effect<Info[]>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Command") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Command") {}
 
   export const layer = Layer.effect(
     Service,

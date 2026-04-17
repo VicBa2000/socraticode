@@ -70,7 +70,7 @@ export function DialogSessionList() {
         }
 
         let footer = ""
-        if (Flag.OPENCODE_EXPERIMENTAL_WORKSPACES) {
+        if (Flag.SOCRATICODE_EXPERIMENTAL_WORKSPACES) {
           if (x.workspaceID) {
             let desc = "unknown"
             if (workspace) {
@@ -165,7 +165,7 @@ export function DialogSessionList() {
           keybind: Keybind.parse("ctrl+w")[0],
           title: "new workspace",
           side: "right",
-          disabled: !Flag.OPENCODE_EXPERIMENTAL_WORKSPACES,
+          disabled: !Flag.SOCRATICODE_EXPERIMENTAL_WORKSPACES,
           onTrigger: () => {
             createWorkspace()
           },

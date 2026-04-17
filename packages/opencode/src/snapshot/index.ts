@@ -56,7 +56,7 @@ export namespace Snapshot {
     readonly diffFull: (from: string, to: string) => Effect.Effect<Snapshot.FileDiff[]>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Snapshot") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Snapshot") {}
 
   export const layer: Layer.Layer<
     Service,

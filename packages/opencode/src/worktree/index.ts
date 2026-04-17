@@ -164,7 +164,7 @@ export namespace Worktree {
     readonly reset: (input: ResetInput) => Effect.Effect<boolean>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Worktree") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Worktree") {}
 
   type GitResult = { code: number; text: string; stderr: string }
 

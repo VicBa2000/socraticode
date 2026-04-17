@@ -1,0 +1,90 @@
+================================================================================
+  SOCRATICODE - QUICKSTART
+================================================================================
+
+REQUIREMENTS
+  - Bun 1.3 or later (https://bun.sh)
+  - Git
+  - (Optional but recommended) Ollama installed if you want to use local
+    models: https://ollama.com
+
+INSTALL (3 steps)
+
+  1. Clone the repo and install dependencies:
+
+     git clone https://github.com/VicBa2000/socraticode.git
+     cd socraticode
+     bun install
+
+  2. Configure your LLM provider:
+
+     bun run --cwd packages/opencode dev setup
+
+     Interactive wizard: choose between Ollama Cloud (free, with API key)
+     or Ollama Local (running on your machine at localhost:11434). Saves
+     the config to ~/.config/socraticode/socraticode.json.
+
+  3. Start the TUI:
+
+     bun run --cwd packages/opencode dev
+
+     First run prompts you to calibrate your level (1-5). Then you're in.
+
+BASIC USAGE
+
+  Inside the TUI:
+
+  - Type your question/task and the mentor responds based on your level
+  - Use slash commands to control:
+      /level 3           change level
+      /mode productive   switch to fast mode
+      /profile           see your full profile
+      /journal           see your progress
+      /teach closures    enter Feynman mode (you explain)
+  - Arrow up/down (with prompt empty) to scroll
+
+ONE-SHOT RUN FROM TERMINAL
+
+  bun run --cwd packages/opencode dev run -m ollama/qwen3:4b "your question"
+  bun run --cwd packages/opencode dev run -m ollama-cloud/minimax-m2 "your question"
+
+BENCHMARK A MODEL (recommended before committing)
+
+  bun run --cwd packages/opencode dev benchmark ollama/qwen3:4b
+
+RECOMMENDED MODELS
+
+  Local:   qwen3:4b (minimum), gemma4 (recommended), qwen2.5-coder:32b (premium)
+  Cloud:   claude-opus-4, gpt-5, gemini-1.5-pro, minimax-m2, any cloud
+
+NOT RECOMMENDED
+
+  llama3.2:3b, qwen2.5:3b, tinyllama, phi-3-mini: too small to handle
+  OpenCode's agent prompt. They hallucinate made-up tool names.
+
+STANDALONE BUILD (optional)
+
+  bun run --cwd packages/opencode build --single
+
+  Produces a binary at:
+    dist/socraticode-<platform>/bin/opencode
+
+RESET YOUR PROFILE
+
+  rm ~/.local/share/socraticode/opencode-local.db
+  (Windows: del %LOCALAPPDATA%\socraticode\opencode-local.db)
+
+FULL DOCUMENTATION
+
+  manual.txt          Complete user manual
+  README.md           Overview and diff with OpenCode
+  FAQ.md              Frequently asked questions
+  CHANGELOG.md        v1.0 feature list
+  CONTRIBUTING.md     How to contribute (JSON data edits)
+
+SUPPORT
+
+  Issues:  https://github.com/VicBa2000/socraticode/issues
+  Upstream OpenCode:  https://github.com/anomalyco/opencode
+
+================================================================================

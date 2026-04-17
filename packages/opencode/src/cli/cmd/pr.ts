@@ -7,7 +7,7 @@ import { Process } from "@/util/process"
 
 export const PrCommand = cmd({
   command: "pr <number>",
-  describe: "fetch and checkout a GitHub PR branch, then run opencode",
+  describe: "fetch and checkout a GitHub PR branch, then run socraticode",
   builder: (yargs) =>
     yargs.positional("number", {
       type: "number",
@@ -101,7 +101,7 @@ export const PrCommand = cmd({
                 UI.println(`Found opencode session: ${sessionUrl}`)
                 UI.println(`Importing session...`)
 
-                const importResult = await Process.text(["opencode", "import", sessionUrl], {
+                const importResult = await Process.text(["socraticode", "import", sessionUrl], {
                   nothrow: true,
                 })
                 if (importResult.code === 0) {
@@ -124,7 +124,7 @@ export const PrCommand = cmd({
         UI.println()
 
         const opencodeArgs = sessionId ? ["-s", sessionId] : []
-        const opencodeProcess = Process.spawn(["opencode", ...opencodeArgs], {
+        const opencodeProcess = Process.spawn(["socraticode", ...opencodeArgs], {
           stdin: "inherit",
           stdout: "inherit",
           stderr: "inherit",

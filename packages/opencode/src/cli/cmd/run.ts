@@ -221,7 +221,7 @@ function normalizePath(input?: string) {
 
 export const RunCommand = cmd({
   command: "run [message..]",
-  describe: "run opencode with a message",
+  describe: "run socraticode with a message",
   builder: (yargs: Argv) => {
     return yargs
       .positional("message", {
@@ -279,12 +279,12 @@ export const RunCommand = cmd({
       })
       .option("attach", {
         type: "string",
-        describe: "attach to a running opencode server (e.g., http://localhost:4096)",
+        describe: "attach to a running socraticode server (e.g., http://localhost:4096)",
       })
       .option("password", {
         alias: ["p"],
         type: "string",
-        describe: "basic auth password (defaults to OPENCODE_SERVER_PASSWORD)",
+        describe: "basic auth password (defaults to SOCRATICODE_SERVER_PASSWORD)",
       })
       .option("dir", {
         type: "string",
@@ -402,7 +402,7 @@ export const RunCommand = cmd({
     async function share(sdk: OpencodeClient, sessionID: string) {
       const cfg = await sdk.config.get()
       if (!cfg.data) return
-      if (cfg.data.share !== "auto" && !Flag.OPENCODE_AUTO_SHARE && !args.share) return
+      if (cfg.data.share !== "auto" && !Flag.SOCRATICODE_AUTO_SHARE && !args.share) return
       const res = await sdk.session.share({ sessionID }).catch((error) => {
         if (error instanceof Error && error.message.includes("disabled")) {
           UI.println(UI.Style.TEXT_DANGER_BOLD + "!  " + error.message)
@@ -669,9 +669,9 @@ export const RunCommand = cmd({
 
     if (args.attach) {
       const headers = (() => {
-        const password = args.password ?? process.env.OPENCODE_SERVER_PASSWORD
+        const password = args.password ?? process.env.SOCRATICODE_SERVER_PASSWORD
         if (!password) return undefined
-        const username = process.env.OPENCODE_SERVER_USERNAME ?? "opencode"
+        const username = process.env.SOCRATICODE_SERVER_USERNAME ?? "socraticode"
         const auth = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`
         return { Authorization: auth }
       })()

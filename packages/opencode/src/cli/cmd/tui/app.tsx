@@ -63,9 +63,17 @@ import { FormatError, FormatUnknownError } from "@/cli/error"
 
 import type { EventSource } from "./context/sdk"
 import { DialogVariant } from "./component/dialog-variant"
+import { DialogSocraticProfile, DialogSocraticWeaknesses, DialogSocraticStrengths } from "./component/dialog-socratic"
+import { DialogSocraticJournal } from "./component/dialog-journal"
+import { DialogCalibration } from "./component/dialog-calibration"
+import { SocraticDB } from "@/socratic/db"
+import { Calibration } from "@/socratic/calibration"
+import { Levels } from "@/socratic/levels"
+import { Modes } from "@/socratic/modes"
+import { SocraticIntegration } from "@/socratic/integration"
 
 function rendererConfig(_config: TuiConfig.Info): CliRendererConfig {
-  const mouseEnabled = !Flag.OPENCODE_DISABLE_MOUSE && (_config.mouse ?? true)
+  const mouseEnabled = !Flag.SOCRATICODE_DISABLE_MOUSE && (_config.mouse ?? true)
 
   return {
     externalOutputMode: "passthrough",
@@ -243,7 +251,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     })
 
   useKeyboard((evt) => {
-    if (!Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
+    if (!Flag.SOCRATICODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
     const sel = renderer.getSelection()
     if (!sel) return
 
@@ -291,17 +299,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   // Update terminal window title based on current route and session
   createEffect(() => {
-    if (!terminalTitleEnabled() || Flag.OPENCODE_DISABLE_TERMINAL_TITLE) return
+    if (!terminalTitleEnabled() || Flag.SOCRATICODE_DISABLE_TERMINAL_TITLE) return
 
     if (route.data.type === "home") {
-      renderer.setTerminalTitle("OpenCode")
+      renderer.setTerminalTitle("SocraticCode")
       return
     }
 
     if (route.data.type === "session") {
       const session = sync.session.get(route.data.sessionID)
       if (!session || SessionApi.isDefaultTitle(session.title)) {
-        renderer.setTerminalTitle("OpenCode")
+        renderer.setTerminalTitle("SocraticCode")
         return
       }
 
@@ -337,6 +345,20 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         })
       }
     })
+  })
+
+  // Socratic: show calibration dialog on first use
+  onMount(() => {
+    setTimeout(() => {
+      try {
+        if (!Calibration.isCalibrated()) {
+          SocraticDB.ensureProfile()
+          dialog.replace(() => <DialogCalibration />)
+        }
+      } catch {
+        // DB not ready yet, skip calibration
+      }
+    }, 500)
   })
 
   let continued = false
@@ -729,6 +751,152 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         dialog.clear()
       },
     },
+    // ── Socratic Commands ──────────────────────────────────
+    {
+      title: "Set level (1-5 or auto)",
+      value: "socratic.level",
+      category: "Socratic",
+      slash: { name: "level" },
+      onSelect: (dialog) => {
+        const info = SocraticIntegration.getCurrentLevel("")
+        if (info) {
+          const override = (() => { try { return Calibration.isOverrideActive() ? " (manual)" : "" } catch { return "" } })()
+          toast.show({ variant: "info", message: `Level: ${info.level} - ${info.name}${override}. Use /level 1-5 or /level auto` })
+        } else {
+          toast.show({ variant: "info", message: "No profile. Start a session to calibrate." })
+        }
+        dialog.clear()
+      },
+    },
+    {
+      title: "Set mode (learn/productive)",
+      value: "socratic.mode",
+      category: "Socratic",
+      slash: { name: "mode" },
+      onSelect: (dialog) => {
+        try {
+          const profile = SocraticDB.getProfile()
+          const mode = profile?.preferred_mode ?? "learn"
+          toast.show({ variant: "info", message: `Mode: ${mode === "learn" ? "Learn" : "Productive"}. Use /mode learn or /mode productive` })
+        } catch {
+          toast.show({ variant: "info", message: "No profile configured." })
+        }
+        dialog.clear()
+      },
+    },
+    {
+      title: "Request more help",
+      value: "socratic.hint",
+      category: "Socratic",
+      slash: { name: "hint" },
+      onSelect: (dialog) => {
+        toast.show({ variant: "info", message: "Hint requested. More help on the next turn." })
+        dialog.clear()
+      },
+    },
+    {
+      title: "Go slower",
+      value: "socratic.slower",
+      category: "Socratic",
+      slash: { name: "slower", aliases: ["despacio"] },
+      onSelect: (dialog) => {
+        toast.show({ variant: "info", message: "I'll slow down the explanations." })
+        dialog.clear()
+      },
+    },
+    {
+      title: "Go faster",
+      value: "socratic.faster",
+      category: "Socratic",
+      slash: { name: "faster", aliases: ["rapido"] },
+      onSelect: (dialog) => {
+        toast.show({ variant: "info", message: "I'll be more direct and concise." })
+        dialog.clear()
+      },
+    },
+    {
+      title: "Challenge mode",
+      value: "socratic.challenge",
+      category: "Socratic",
+      slash: { name: "challenge", aliases: ["desafio"] },
+      onSelect: (dialog) => {
+        toast.show({ variant: "info", message: "Challenge mode activated for the next turn." })
+        dialog.clear()
+      },
+    },
+    {
+      title: "View pedagogical profile",
+      value: "socratic.profile",
+      category: "Socratic",
+      slash: { name: "profile", aliases: ["perfil"] },
+      onSelect: () => {
+        dialog.replace(() => <DialogSocraticProfile />)
+      },
+    },
+    {
+      title: "View weaknesses",
+      value: "socratic.weakness",
+      category: "Socratic",
+      slash: { name: "weakness", aliases: ["debilidades"] },
+      onSelect: () => {
+        dialog.replace(() => <DialogSocraticWeaknesses />)
+      },
+    },
+    {
+      title: "View strengths",
+      value: "socratic.strengths",
+      category: "Socratic",
+      slash: { name: "strengths", aliases: ["fortalezas"] },
+      onSelect: () => {
+        dialog.replace(() => <DialogSocraticStrengths />)
+      },
+    },
+    {
+      title: "View pedagogical journal (latest)",
+      value: "socratic.journal",
+      category: "Socratic",
+      slash: { name: "journal" },
+      onSelect: () => {
+        dialog.replace(() => <DialogSocraticJournal mode="latest" />)
+      },
+    },
+    {
+      title: "View weekly rollup",
+      value: "socratic.journal.week",
+      category: "Socratic",
+      onSelect: () => {
+        dialog.replace(() => <DialogSocraticJournal mode="week" />)
+      },
+    },
+    {
+      title: "View monthly rollup",
+      value: "socratic.journal.month",
+      category: "Socratic",
+      onSelect: () => {
+        dialog.replace(() => <DialogSocraticJournal mode="month" />)
+      },
+    },
+    {
+      title: "Start Feynman teach-mode (you explain)",
+      value: "socratic.teach",
+      category: "Socratic",
+      slash: { name: "teach" },
+      onSelect: () => {
+        toast.show({
+          variant: "info",
+          message: "Usage: /teach <topic> — type it in the prompt with a topic.",
+        })
+      },
+    },
+    {
+      title: "End Feynman teach-mode",
+      value: "socratic.endteach",
+      category: "Socratic",
+      slash: { name: "endteach" },
+      onSelect: () => {
+        toast.show({ variant: "info", message: "Type /endteach in the prompt to exit teach-mode." })
+      },
+    },
   ])
 
   event.on(TuiEvent.CommandExecute.type, (evt) => {
@@ -814,7 +982,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     await DialogAlert.show(
       dialog,
       "Update Complete",
-      `Successfully updated to OpenCode v${result.data.version}. Please restart the application.`,
+      `Successfully updated to SocraticCode v${result.data.version}. Please restart the application.`,
     )
 
     exit()
@@ -834,16 +1002,16 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       height={dimensions().height}
       backgroundColor={theme.background}
       onMouseDown={(evt) => {
-        if (!Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
+        if (!Flag.SOCRATICODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
         if (evt.button !== MouseButton.RIGHT) return
 
         if (!Selection.copy(renderer, toast)) return
         evt.preventDefault()
         evt.stopPropagation()
       }}
-      onMouseUp={Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
+      onMouseUp={Flag.SOCRATICODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
     >
-      <Show when={Flag.OPENCODE_SHOW_TTFD}>
+      <Show when={Flag.SOCRATICODE_SHOW_TTFD}>
         <TimeToFirstDraw />
       </Show>
       <Show when={ready()}>

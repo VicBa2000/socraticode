@@ -31,7 +31,7 @@ export namespace Todo {
     readonly get: (sessionID: SessionID) => Effect.Effect<Info[]>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/SessionTodo") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/SessionTodo") {}
 
   export const layer = Layer.effect(
     Service,

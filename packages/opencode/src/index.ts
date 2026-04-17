@@ -35,6 +35,9 @@ import { JsonMigration } from "./storage/json-migration"
 import { Database } from "./storage/db"
 import { errorMessage } from "./util/error"
 import { PluginCommand } from "./cli/cmd/plug"
+import { SetupCommand } from "./cli/cmd/setup"
+import { BenchmarkCommand } from "./cli/cmd/benchmark"
+import { ChatCommand } from "./cli/cmd/chat"
 import { Heap } from "./cli/heap"
 import { drizzle } from "drizzle-orm/bun-sqlite"
 
@@ -64,7 +67,7 @@ function show(out: string) {
 
 const cli = yargs(args)
   .parserConfiguration({ "populate--": true })
-  .scriptName("opencode")
+  .scriptName("socraticode")
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")
@@ -85,7 +88,7 @@ const cli = yargs(args)
   })
   .middleware(async (opts) => {
     if (opts.pure) {
-      process.env.OPENCODE_PURE = "1"
+      process.env.SOCRATICODE_PURE = "1"
     }
 
     await Log.init({
@@ -101,15 +104,15 @@ const cli = yargs(args)
     Heap.start()
 
     process.env.AGENT = "1"
-    process.env.OPENCODE = "1"
-    process.env.OPENCODE_PID = String(process.pid)
+    process.env.SOCRATICODE = "1"
+    process.env.SOCRATICODE_PID = String(process.pid)
 
-    Log.Default.info("opencode", {
+    Log.Default.info("socraticode", {
       version: Installation.VERSION,
       args: process.argv.slice(2),
     })
 
-    const marker = path.join(Global.Path.data, "opencode.db")
+    const marker = path.join(Global.Path.data, "socraticode.db")
     if (!(await Filesystem.exists(marker))) {
       const tty = process.stderr.isTTY
       process.stderr.write("Performing one time database migration, may take a few minutes..." + EOL)
@@ -171,6 +174,9 @@ const cli = yargs(args)
   .command(SessionCommand)
   .command(PluginCommand)
   .command(DbCommand)
+  .command(SetupCommand)
+  .command(BenchmarkCommand)
+  .command(ChatCommand)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||

@@ -51,8 +51,8 @@ export function DialogGoUpsell(props: DialogGoUpsellProps) {
       </box>
       <box gap={1} paddingBottom={1}>
         <text fg={theme.textMuted}>
-          Subscribe to OpenCode Go to keep going with reliable access to the best open-source models, starting at
-          $5/month.
+          Subscribe to OpenCode Go for reliable access to open-source models, or use /setup to configure Ollama
+          Cloud (free).
         </text>
         <box flexDirection="row" gap={1}>
           <Link href={GO_URL} fg={theme.primary} />

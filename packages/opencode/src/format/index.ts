@@ -30,7 +30,7 @@ export namespace Format {
     readonly file: (filepath: string) => Effect.Effect<void>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Format") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Format") {}
 
   export const layer = Layer.effect(
     Service,

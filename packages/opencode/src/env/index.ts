@@ -12,7 +12,7 @@ export namespace Env {
     readonly remove: (key: string) => Effect.Effect<void>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Env") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Env") {}
 
   export const layer = Layer.effect(
     Service,

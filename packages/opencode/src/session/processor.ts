@@ -20,6 +20,9 @@ import { Question } from "@/question"
 import { errorMessage } from "@/util/error"
 import { Log } from "@/util/log"
 import { isRecord } from "@/util/record"
+import { SocraticIntegration } from "../socratic/integration"
+import { TextTools } from "../socratic/text-tools"
+import { Capability } from "../socratic/capability"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -76,7 +79,7 @@ export namespace SessionProcessor {
 
   type StreamEvent = Event
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/SessionProcessor") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/SessionProcessor") {}
 
   export const layer: Layer.Layer<
     Service,
@@ -441,6 +444,38 @@ export namespace SessionProcessor {
                 },
                 { text: ctx.currentText.text },
               )).text
+              // ── SocraticCode: strip HINT_META and process it ──
+              {
+                const { cleanText, meta } = SocraticIntegration.parseHintMeta(ctx.currentText.text)
+                if (meta) {
+                  ctx.currentText.text = cleanText
+                  SocraticIntegration.processResponseMeta(ctx.sessionID, meta)
+                }
+              }
+              // ── SocraticCode 12d.3: text-mode tool calls ──
+              // Lite models emit <tool-call> blocks in prose (see text-tools.ts).
+              // Strip them from user-visible text so the response reads cleanly,
+              // and append a short notice listing what the model asked for.
+              // Actual execution via the tool registry lands in v1.1 — for now
+              // the user at least sees the intent.
+              {
+                const info = Capability.getModelInfo(ctx.model.id)
+                if (info.tier === "lite" && !info.nativeToolSupport) {
+                  const parsed = TextTools.extract(ctx.currentText.text)
+                  if (parsed.calls.length > 0) {
+                    const names = parsed.calls.map((c) => `\`${c.name}\``).join(", ")
+                    ctx.currentText.text =
+                      parsed.cleanText +
+                      `\n\n_(model requested tool${parsed.calls.length > 1 ? "s" : ""}: ${names} — lite text-mode dispatch not yet implemented)_`
+                    log.info("socratic-text-tool-calls-detected", {
+                      sessionID: ctx.sessionID,
+                      count: parsed.calls.length,
+                      names: parsed.calls.map((c) => c.name),
+                    })
+                  }
+                }
+              }
+              // ── End SocraticCode ──
               {
                 const end = Date.now()
                 ctx.currentText.time = { start: ctx.currentText.time?.start ?? end, end }

@@ -40,7 +40,7 @@ export namespace Truncate {
     readonly output: (text: string, options?: Options, agent?: Agent.Info) => Effect.Effect<Result>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Truncate") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Truncate") {}
 
   export const layer = Layer.effect(
     Service,

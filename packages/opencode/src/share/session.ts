@@ -13,7 +13,7 @@ export namespace SessionShare {
     readonly unshare: (sessionID: SessionID) => Effect.Effect<void, unknown>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/SessionShare") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/SessionShare") {}
 
   export const layer = Layer.effect(
     Service,
@@ -42,7 +42,7 @@ export namespace SessionShare {
         const result = yield* session.create(input)
         if (result.parentID) return result
         const conf = yield* cfg.get()
-        if (!(Flag.OPENCODE_AUTO_SHARE || conf.share === "auto")) return result
+        if (!(Flag.SOCRATICODE_AUTO_SHARE || conf.share === "auto")) return result
         yield* share(result.id).pipe(Effect.ignore, Effect.forkIn(scope))
         return result
       })

@@ -134,7 +134,7 @@ export namespace Permission {
     return evalRule(permission, pattern, ...rulesets)
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Permission") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Permission") {}
 
   export const layer = Layer.effect(
     Service,

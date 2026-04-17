@@ -57,7 +57,7 @@ export namespace Installation {
 
   export const VERSION = version
   export const CHANNEL = channel
-  export const USER_AGENT = `opencode/${CHANNEL}/${VERSION}/${Flag.OPENCODE_CLIENT}`
+  export const USER_AGENT = `opencode/${CHANNEL}/${VERSION}/${Flag.SOCRATICODE_CLIENT}`
 
   export function isPreview() {
     return CHANNEL !== "latest"
@@ -90,7 +90,7 @@ export namespace Installation {
     readonly upgrade: (method: Method, target: string) => Effect.Effect<void, UpgradeFailedError>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Installation") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Installation") {}
 
   export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildProcessSpawner.ChildProcessSpawner> =
     Layer.effect(
@@ -211,7 +211,7 @@ export namespace Installation {
               return info.formulae[0].versions.stable
             }
             const response = yield* httpOk.execute(
-              HttpClientRequest.get("https://formulae.brew.sh/api/formula/opencode.json").pipe(
+              HttpClientRequest.get("https://formulae.brew.sh/api/formula/socraticode.json").pipe(
                 HttpClientRequest.acceptJson,
               ),
             )
@@ -244,7 +244,7 @@ export namespace Installation {
           if (detectedMethod === "scoop") {
             const response = yield* httpOk.execute(
               HttpClientRequest.get(
-                "https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/opencode.json",
+                "https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/socraticode.json",
               ).pipe(HttpClientRequest.setHeaders({ Accept: "application/json" })),
             )
             const data = yield* HttpClientResponse.schemaBodyJson(ScoopManifest)(response)

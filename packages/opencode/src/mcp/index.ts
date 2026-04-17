@@ -245,7 +245,7 @@ export namespace MCP {
     readonly getAuthStatus: (mcpName: string) => Effect.Effect<AuthStatus>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/MCP") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/MCP") {}
 
   export const layer = Layer.effect(
     Service,

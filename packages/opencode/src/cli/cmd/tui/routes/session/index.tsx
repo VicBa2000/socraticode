@@ -7,6 +7,7 @@ import {
   For,
   Match,
   on,
+  onCleanup,
   onMount,
   Show,
   Switch,
@@ -159,7 +160,7 @@ export function Session() {
   const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
   const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
   const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
-  const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
+  const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", true)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
@@ -219,6 +220,8 @@ export function Session() {
   })
 
   let scroll: ScrollBoxRenderable
+  const [userScrolled, setUserScrolled] = createSignal(false)
+
   let prompt: PromptRef | undefined
   const bind = (r: PromptRef | undefined) => {
     prompt = r
@@ -277,6 +280,42 @@ export function Session() {
     }
   })
 
+  // ── Scroll Control ───────────────────────────────────────
+  // Pause sticky scroll when user scrolls up, resume when at bottom
+  function scrollUp(amount: number) {
+    if (!scroll || scroll.isDestroyed) return
+    scroll.stickyScroll = false
+    setUserScrolled(true)
+    scroll.scrollBy(-amount)
+  }
+
+  function scrollDown(amount: number) {
+    if (!scroll || scroll.isDestroyed) return
+    scroll.scrollBy(amount)
+    // Re-enable sticky if near bottom
+    setTimeout(() => {
+      if (!scroll || scroll.isDestroyed) return
+      if (scroll.y + scroll.height >= scroll.scrollHeight - 5) {
+        scroll.stickyScroll = true
+        setUserScrolled(false)
+      }
+    }, 50)
+  }
+
+  function scrollToTop() {
+    if (!scroll || scroll.isDestroyed) return
+    scroll.stickyScroll = false
+    setUserScrolled(true)
+    scroll.scrollTo(0)
+  }
+
+  function scrollToBottom() {
+    if (!scroll || scroll.isDestroyed) return
+    scroll.stickyScroll = true
+    setUserScrolled(false)
+    scroll.scrollTo(scroll.scrollHeight)
+  }
+
   // Helper: Find next visible message boundary in direction
   const findNextVisibleMessage = (direction: "next" | "prev"): string | null => {
     const children = scroll.getChildren()
@@ -326,6 +365,7 @@ export function Session() {
   function toBottom() {
     setTimeout(() => {
       if (!scroll || scroll.isDestroyed) return
+      if (userScrolled()) return
       scroll.scrollTo(scroll.scrollHeight)
     }, 50)
   }
@@ -668,7 +708,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(-scroll.height / 2)
+        scrollUp(Math.floor(scroll.height / 2))
         dialog.clear()
       },
     },
@@ -679,7 +719,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(scroll.height / 2)
+        scrollDown(Math.floor(scroll.height / 2))
         dialog.clear()
       },
     },
@@ -688,9 +728,9 @@ export function Session() {
       value: "session.line.up",
       keybind: "messages_line_up",
       category: "Session",
-      disabled: true,
+      hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(-1)
+        scrollUp(3)
         dialog.clear()
       },
     },
@@ -699,9 +739,9 @@ export function Session() {
       value: "session.line.down",
       keybind: "messages_line_down",
       category: "Session",
-      disabled: true,
+      hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(1)
+        scrollDown(3)
         dialog.clear()
       },
     },
@@ -712,7 +752,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(-scroll.height / 4)
+        scrollUp(Math.floor(scroll.height / 4))
         dialog.clear()
       },
     },
@@ -723,7 +763,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollBy(scroll.height / 4)
+        scrollDown(Math.floor(scroll.height / 4))
         dialog.clear()
       },
     },
@@ -734,7 +774,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollTo(0)
+        scrollToTop()
         dialog.clear()
       },
     },
@@ -745,7 +785,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
-        scroll.scrollTo(scroll.scrollHeight)
+        scrollToBottom()
         dialog.clear()
       },
     },
@@ -1066,6 +1106,7 @@ export function Session() {
               verticalScrollbarOptions={{
                 paddingLeft: 1,
                 visible: showScrollbar(),
+                showArrows: true,
                 trackOptions: {
                   backgroundColor: theme.backgroundElement,
                   foregroundColor: theme.border,
@@ -1198,7 +1239,7 @@ export function Session() {
                     ref={bind}
                     disabled={disabled()}
                     onSubmit={() => {
-                      toBottom()
+                      scrollToBottom()
                     }}
                     sessionID={route.sessionID}
                     right={<TuiPluginRuntime.Slot name="session_prompt_right" session_id={route.sessionID} />}
@@ -1477,7 +1518,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
     <Show when={props.part.text.trim()}>
       <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
         <Switch>
-          <Match when={Flag.OPENCODE_EXPERIMENTAL_MARKDOWN}>
+          <Match when={Flag.SOCRATICODE_EXPERIMENTAL_MARKDOWN}>
             <markdown
               syntaxStyle={syntax()}
               streaming={true}
@@ -1487,7 +1528,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               bg={theme.background}
             />
           </Match>
-          <Match when={!Flag.OPENCODE_EXPERIMENTAL_MARKDOWN}>
+          <Match when={!Flag.SOCRATICODE_EXPERIMENTAL_MARKDOWN}>
             <code
               filetype="markdown"
               drawUnstyledText={false}

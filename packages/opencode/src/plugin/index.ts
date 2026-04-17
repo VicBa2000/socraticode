@@ -52,7 +52,7 @@ export namespace Plugin {
     readonly init: () => Effect.Effect<void>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Plugin") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Plugin") {}
 
   // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [
@@ -126,9 +126,9 @@ export namespace Plugin {
           const client = createOpencodeClient({
             baseUrl: "http://localhost:4096",
             directory: ctx.directory,
-            headers: Flag.OPENCODE_SERVER_PASSWORD
+            headers: Flag.SOCRATICODE_SERVER_PASSWORD
               ? {
-                  Authorization: `Basic ${Buffer.from(`${Flag.OPENCODE_SERVER_USERNAME ?? "opencode"}:${Flag.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`,
+                  Authorization: `Basic ${Buffer.from(`${Flag.SOCRATICODE_SERVER_USERNAME ?? "opencode"}:${Flag.SOCRATICODE_SERVER_PASSWORD}`).toString("base64")}`,
                 }
               : undefined,
             fetch: async (...args) => (await Server.Default()).app.fetch(...args),
@@ -162,8 +162,8 @@ export namespace Plugin {
             if (init._tag === "Some") hooks.push(init.value)
           }
 
-          const plugins = Flag.OPENCODE_PURE ? [] : (cfg.plugin_origins ?? [])
-          if (Flag.OPENCODE_PURE && cfg.plugin_origins?.length) {
+          const plugins = Flag.SOCRATICODE_PURE ? [] : (cfg.plugin_origins ?? [])
+          if (Flag.SOCRATICODE_PURE && cfg.plugin_origins?.length) {
             log.info("skipping external plugins in pure mode", { count: cfg.plugin_origins.length })
           }
           if (plugins.length) yield* config.waitForDependencies()

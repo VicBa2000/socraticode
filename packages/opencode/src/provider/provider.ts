@@ -339,7 +339,7 @@ export namespace Provider {
             }
 
             // Region resolution precedence (highest to lowest):
-            // 1. options.region from opencode.json provider config
+            // 1. options.region from socraticode.json provider config
             // 2. defaultRegion from AWS_REGION environment variable
             // 3. Default "us-east-1" (baked into defaultRegion)
             const region = options?.region ?? defaultRegion
@@ -924,7 +924,7 @@ export namespace Provider {
     varsLoaders: Record<string, CustomVarsLoader>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Provider") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Provider") {}
 
   function cost(c: ModelsDev.Model["cost"]): Model["cost"] {
     const result: Model["cost"] = {
@@ -1323,7 +1323,7 @@ export namespace Provider {
                 (providerID === ProviderID.openrouter && modelID === "openai/gpt-5-chat")
               )
                 delete provider.models[modelID]
-              if (model.status === "alpha" && !Flag.OPENCODE_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
+              if (model.status === "alpha" && !Flag.SOCRATICODE_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
               if (model.status === "deprecated") delete provider.models[modelID]
               if (
                 (configProvider?.blacklist && configProvider.blacklist.includes(modelID)) ||
@@ -1530,7 +1530,7 @@ export namespace Provider {
 
         return yield* Effect.promise(async () => {
           const url = (() => {
-            const item = envs["OPENCODE_E2E_LLM_URL"]
+            const item = envs["SOCRATICODE_E2E_LLM_URL"]
             if (typeof item !== "string" || item === "") return
             return item
           })()

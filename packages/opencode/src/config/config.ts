@@ -69,7 +69,7 @@ export namespace Config {
   }
 
   export function managedConfigDir() {
-    return process.env.OPENCODE_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
+    return process.env.SOCRATICODE_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
   }
 
   const managedDir = managedConfigDir()
@@ -177,7 +177,7 @@ export namespace Config {
       })
       if (!md) continue
 
-      const patterns = ["/.opencode/command/", "/.opencode/commands/", "/command/", "/commands/"]
+      const patterns = ["/.socraticode/command/", "/.socraticode/commands/", "/command/", "/commands/"]
       const file = rel(item, patterns) ?? path.basename(item)
       const name = trim(file)
 
@@ -216,7 +216,7 @@ export namespace Config {
       })
       if (!md) continue
 
-      const patterns = ["/.opencode/agent/", "/.opencode/agents/", "/agent/", "/agents/"]
+      const patterns = ["/.socraticode/agent/", "/.socraticode/agents/", "/agent/", "/agents/"]
       const file = rel(item, patterns) ?? path.basename(item)
       const agentName = trim(file)
 
@@ -590,19 +590,19 @@ export namespace Config {
       session_unshare: z.string().optional().default("none").describe("Unshare current session"),
       session_interrupt: z.string().optional().default("escape").describe("Interrupt current session"),
       session_compact: z.string().optional().default("<leader>c").describe("Compact the session"),
-      messages_page_up: z.string().optional().default("pageup,ctrl+alt+b").describe("Scroll messages up by one page"),
+      messages_page_up: z.string().optional().default("pageup,ctrl+alt+b,shift+up").describe("Scroll messages up by one page"),
       messages_page_down: z
         .string()
         .optional()
-        .default("pagedown,ctrl+alt+f")
+        .default("pagedown,ctrl+alt+f,shift+down")
         .describe("Scroll messages down by one page"),
-      messages_line_up: z.string().optional().default("ctrl+alt+y").describe("Scroll messages up by one line"),
-      messages_line_down: z.string().optional().default("ctrl+alt+e").describe("Scroll messages down by one line"),
-      messages_half_page_up: z.string().optional().default("ctrl+alt+u").describe("Scroll messages up by half page"),
+      messages_line_up: z.string().optional().default("ctrl+alt+y,ctrl+up").describe("Scroll messages up by one line"),
+      messages_line_down: z.string().optional().default("ctrl+alt+e,ctrl+down").describe("Scroll messages down by one line"),
+      messages_half_page_up: z.string().optional().default("ctrl+alt+u,alt+up").describe("Scroll messages up by half page"),
       messages_half_page_down: z
         .string()
         .optional()
-        .default("ctrl+alt+d")
+        .default("ctrl+alt+d,alt+down")
         .describe("Scroll messages down by half page"),
       messages_first: z.string().optional().default("ctrl+g,home").describe("Navigate to first message"),
       messages_last: z.string().optional().default("ctrl+alt+g,end").describe("Navigate to last message"),
@@ -1082,10 +1082,10 @@ export namespace Config {
     readonly waitForDependencies: () => Effect.Effect<void>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Config") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Config") {}
 
   function globalConfigFile() {
-    const candidates = ["opencode.jsonc", "opencode.json", "config.json"].map((file) =>
+    const candidates = ["socraticode.jsonc", "socraticode.json", "config.json"].map((file) =>
       path.join(Global.Path.config, file),
     )
     for (const file of candidates) {
@@ -1240,8 +1240,8 @@ export namespace Config {
         let result: Info = pipe(
           {},
           mergeDeep(yield* loadFile(path.join(Global.Path.config, "config.json"))),
-          mergeDeep(yield* loadFile(path.join(Global.Path.config, "opencode.json"))),
-          mergeDeep(yield* loadFile(path.join(Global.Path.config, "opencode.jsonc"))),
+          mergeDeep(yield* loadFile(path.join(Global.Path.config, "socraticode.json"))),
+          mergeDeep(yield* loadFile(path.join(Global.Path.config, "socraticode.jsonc"))),
         )
 
         const legacy = path.join(Global.Path.config, "config")
@@ -1354,7 +1354,7 @@ export namespace Config {
 
         const scope = Effect.fnUntraced(function* (source: string) {
           if (source.startsWith("http://") || source.startsWith("https://")) return "global"
-          if (source === "OPENCODE_CONFIG_CONTENT") return "local"
+          if (source === "SOCRATICODE_CONFIG_CONTENT") return "local"
           if (yield* InstanceRef.use((ctx) => Effect.succeed(Instance.containsPath(source, ctx)))) return "local"
           return "global"
         })
@@ -1400,12 +1400,12 @@ export namespace Config {
         const global = yield* getGlobal()
         yield* merge(Global.Path.config, global, "global")
 
-        if (Flag.OPENCODE_CONFIG) {
-          yield* merge(Flag.OPENCODE_CONFIG, yield* loadFile(Flag.OPENCODE_CONFIG))
-          log.debug("loaded custom config", { path: Flag.OPENCODE_CONFIG })
+        if (Flag.SOCRATICODE_CONFIG) {
+          yield* merge(Flag.SOCRATICODE_CONFIG, yield* loadFile(Flag.SOCRATICODE_CONFIG))
+          log.debug("loaded custom config", { path: Flag.SOCRATICODE_CONFIG })
         }
 
-        if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
+        if (!Flag.SOCRATICODE_DISABLE_PROJECT_CONFIG) {
           for (const file of yield* Effect.promise(() =>
             ConfigPaths.projectFiles("opencode", ctx.directory, ctx.worktree),
           )) {
@@ -1419,15 +1419,15 @@ export namespace Config {
 
         const directories = yield* Effect.promise(() => ConfigPaths.directories(ctx.directory, ctx.worktree))
 
-        if (Flag.OPENCODE_CONFIG_DIR) {
-          log.debug("loading config from OPENCODE_CONFIG_DIR", { path: Flag.OPENCODE_CONFIG_DIR })
+        if (Flag.SOCRATICODE_CONFIG_DIR) {
+          log.debug("loading config from SOCRATICODE_CONFIG_DIR", { path: Flag.SOCRATICODE_CONFIG_DIR })
         }
 
         const deps: Fiber.Fiber<void, never>[] = []
 
         for (const dir of unique(directories)) {
-          if (dir.endsWith(".opencode") || dir === Flag.OPENCODE_CONFIG_DIR) {
-            for (const file of ["opencode.json", "opencode.jsonc"]) {
+          if (dir.endsWith(".opencode") || dir === Flag.SOCRATICODE_CONFIG_DIR) {
+            for (const file of ["socraticode.json", "socraticode.jsonc"]) {
               const source = path.join(dir, file)
               log.debug(`loading config from ${source}`)
               yield* merge(source, yield* loadFile(source))
@@ -1458,14 +1458,14 @@ export namespace Config {
           yield* track(dir, list)
         }
 
-        if (process.env.OPENCODE_CONFIG_CONTENT) {
-          const source = "OPENCODE_CONFIG_CONTENT"
-          const next = yield* loadConfig(process.env.OPENCODE_CONFIG_CONTENT, {
+        if (process.env.SOCRATICODE_CONFIG_CONTENT) {
+          const source = "SOCRATICODE_CONFIG_CONTENT"
+          const next = yield* loadConfig(process.env.SOCRATICODE_CONFIG_CONTENT, {
             dir: ctx.directory,
             source,
           })
           yield* merge(source, next, "local")
-          log.debug("loaded custom config from OPENCODE_CONFIG_CONTENT")
+          log.debug("loaded custom config from SOCRATICODE_CONFIG_CONTENT")
         }
 
         const activeOrg = Option.getOrUndefined(
@@ -1478,8 +1478,8 @@ export namespace Config {
               { concurrency: 2 },
             )
             if (Option.isSome(tokenOpt)) {
-              process.env["OPENCODE_CONSOLE_TOKEN"] = tokenOpt.value
-              yield* env.set("OPENCODE_CONSOLE_TOKEN", tokenOpt.value)
+              process.env["SOCRATICODE_CONSOLE_TOKEN"] = tokenOpt.value
+              yield* env.set("SOCRATICODE_CONSOLE_TOKEN", tokenOpt.value)
             }
 
             activeOrgName = activeOrg.org.name
@@ -1506,7 +1506,7 @@ export namespace Config {
         }
 
         if (existsSync(managedDir)) {
-          for (const file of ["opencode.json", "opencode.jsonc"]) {
+          for (const file of ["socraticode.json", "socraticode.jsonc"]) {
             const source = path.join(managedDir, file)
             yield* merge(source, yield* loadFile(source), "global")
           }
@@ -1524,8 +1524,8 @@ export namespace Config {
           })
         }
 
-        if (Flag.OPENCODE_PERMISSION) {
-          result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.OPENCODE_PERMISSION))
+        if (Flag.SOCRATICODE_PERMISSION) {
+          result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.SOCRATICODE_PERMISSION))
         }
 
         if (result.tools) {
@@ -1547,10 +1547,10 @@ export namespace Config {
           result.share = "auto"
         }
 
-        if (Flag.OPENCODE_DISABLE_AUTOCOMPACT) {
+        if (Flag.SOCRATICODE_DISABLE_AUTOCOMPACT) {
           result.compaction = { ...result.compaction, auto: false }
         }
-        if (Flag.OPENCODE_DISABLE_PRUNE) {
+        if (Flag.SOCRATICODE_DISABLE_PRUNE) {
           result.compaction = { ...result.compaction, prune: false }
         }
 

@@ -1,7 +1,7 @@
 declare global {
-  const OPENCODE_VERSION: string
-  const OPENCODE_CHANNEL: string
+  const SOCRATICODE_VERSION: string
+  const SOCRATICODE_CHANNEL: string
 }
 
-export const VERSION = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"
-export const CHANNEL = typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local"
+export const VERSION = typeof SOCRATICODE_VERSION === "string" ? SOCRATICODE_VERSION : "local"
+export const CHANNEL = typeof SOCRATICODE_CHANNEL === "string" ? SOCRATICODE_CHANNEL : "local"

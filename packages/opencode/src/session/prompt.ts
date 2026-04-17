@@ -48,6 +48,7 @@ import { EffectLogger } from "@/effect/logger"
 import { InstanceState } from "@/effect/instance-state"
 import { TaskTool, type TaskPromptOps } from "@/tool/task"
 import { SessionRunState } from "./run-state"
+import { SocraticIntegration } from "../socratic/integration"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -75,7 +76,7 @@ export namespace SessionPrompt {
     readonly resolvePromptParts: (template: string) => Effect.Effect<PromptInput["parts"]>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/SessionPrompt") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/SessionPrompt") {}
 
   export const layer = Layer.effect(
     Service,
@@ -229,7 +230,7 @@ export namespace SessionPrompt {
         const userMessage = input.messages.findLast((msg) => msg.info.role === "user")
         if (!userMessage) return input.messages
 
-        if (!Flag.OPENCODE_EXPERIMENTAL_PLAN_MODE) {
+        if (!Flag.SOCRATICODE_EXPERIMENTAL_PLAN_MODE) {
           if (input.agent.name === "plan") {
             userMessage.parts.push({
               id: PartID.ascending(),
@@ -1488,9 +1489,102 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                 instruction.system().pipe(Effect.orDie),
                 MessageV2.toModelMessagesEffect(msgs, model),
               ])
-              const system = [...env, ...(skills ? [skills] : []), ...instructions]
+              // ── SocraticCode Phase 12d: omit verbose skills section on lite ──
+              // The skills listing is 1-2k tokens of capability descriptions.
+              // Small local models (3-8B) drown in it and start listing skill
+              // names back at the user instead of answering. Strong models
+              // are unaffected and get the full skills briefing.
+              const socraticSkipSkills = SocraticIntegration.shouldUseLiteToolMode(model.modelID)
+              const system = [
+                ...env,
+                ...(!socraticSkipSkills && skills ? [skills] : []),
+                ...instructions,
+              ]
+
+              // ── SocraticCode: inject adaptive system prompts ──
+              // Snapshot tool names + descriptions so lite-mode can teach the
+              // text-tool protocol with the real tool list (not a placeholder).
+              const socraticToolList: SocraticIntegration.ToolDescriptor[] = Object.entries(tools).map(
+                ([name, def]) => ({
+                  name,
+                  description: (def as { description?: string })?.description ?? "",
+                }),
+              )
+              const socraticSections = SocraticIntegration.buildSystemPrompt(
+                sessionID,
+                model.modelID,
+                socraticToolList,
+              )
+              if (socraticSections.length > 0) {
+                system.push(...socraticSections)
+              }
+              // Analyze user message for socratic signals (zero-knowledge, pressure, etc.)
+              const lastUserText = msgs
+                .findLast((m) => m.info.role === "user")
+                ?.parts.filter((p) => p.type === "text" && !p.synthetic)
+                .map((p) => (p as any).text)
+                .join(" ") ?? ""
+              if (lastUserText) {
+                const extraSocratic = SocraticIntegration.analyzeUserMessage(sessionID, lastUserText)
+                if (extraSocratic.length > 0) {
+                  system.push(...extraSocratic)
+                }
+              }
+              // ── End SocraticCode injection ──
+
               const format = lastUser.format ?? { type: "text" as const }
               if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+
+              // ── SocraticCode Phase 12d: lite tool mode ──
+              // Small local models choke on full JSON Schema tool payloads.
+              // When the active model is lite + lacks native tool support,
+              // we strip the AI SDK schemas entirely — the markdown tool
+              // list already injected into `system` becomes the only tool
+              // reference the model sees. Frees 1-2k tokens for the task.
+              const socraticLiteTools = SocraticIntegration.shouldUseLiteToolMode(model.modelID)
+              const effectiveTools = socraticLiteTools ? {} : tools
+
+              // ── SocraticCode Phase 12d: budget trim ──
+              // Estimate context load and trim the oldest non-user messages
+              // if we're about to overflow the model's window.
+              const budgetMessages = modelMsgs.map((m) => {
+                const content = typeof (m as any).content === "string"
+                  ? ((m as any).content as string)
+                  : JSON.stringify((m as any).content ?? "")
+                return { role: (m as any).role as string, content, pinned: false }
+              })
+              if (budgetMessages.length > 0) {
+                // Pin the last user message — we never drop what the user just asked.
+                const lastUserIdx = budgetMessages
+                  .map((m, i) => ({ m, i }))
+                  .reverse()
+                  .find((x) => x.m.role === "user")?.i
+                if (lastUserIdx !== undefined) budgetMessages[lastUserIdx]!.pinned = true
+              }
+              const budgetPlan = SocraticIntegration.planBudget(
+                model.modelID,
+                system.join("\n"),
+                socraticLiteTools ? "" : JSON.stringify(tools),
+                budgetMessages,
+              )
+              const effectiveMessages = budgetPlan.trim.trimmed
+                ? (() => {
+                    const keepIndices = new Set(
+                      budgetPlan.trim.messages.map((m) =>
+                        budgetMessages.indexOf(m),
+                      ),
+                    )
+                    return modelMsgs.filter((_, i) => keepIndices.has(i))
+                  })()
+                : modelMsgs
+              if (budgetPlan.warning) {
+                log.info("socratic-budget-trim", {
+                  warning: budgetPlan.warning,
+                  dropped: budgetPlan.trim.dropped,
+                  modelID: model.modelID,
+                })
+              }
+
               const result = yield* handle.process({
                 user: lastUser,
                 agent,
@@ -1498,8 +1592,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                 sessionID,
                 parentSessionID: session.parentID,
                 system,
-                messages: [...modelMsgs, ...(isLastStep ? [{ role: "assistant" as const, content: MAX_STEPS }] : [])],
-                tools,
+                messages: [...effectiveMessages, ...(isLastStep ? [{ role: "assistant" as const, content: MAX_STEPS }] : [])],
+                tools: effectiveTools,
                 model,
                 toolChoice: format.type === "json_schema" ? "required" : undefined,
               })

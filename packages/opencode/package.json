@@ -1,7 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "1.4.4",
-  "name": "opencode",
+  "version": "1.0.0",
+  "name": "socraticode",
+  "description": "Socratic fork of OpenCode — an AI coding mentor that teaches instead of just coding for you",
   "type": "module",
   "license": "MIT",
   "private": true,
@@ -17,7 +18,7 @@
     "db": "bun drizzle-kit"
   },
   "bin": {
-    "opencode": "./bin/opencode"
+    "socraticode": "./bin/opencode"
   },
   "exports": {
     "./*": "./src/*.ts"

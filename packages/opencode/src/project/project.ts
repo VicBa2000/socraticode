@@ -99,7 +99,7 @@ export namespace Project {
     readonly removeSandbox: (id: ProjectID, directory: string) => Effect.Effect<void>
   }
 
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Project") {}
+  export class Service extends Context.Service<Service, Interface>()("@socraticode/Project") {}
 
   type GitResult = { code: number; text: string; stderr: string }
 
@@ -142,7 +142,7 @@ export namespace Project {
           }),
         )
 
-      const fakeVcs = Info.shape.vcs.parse(Flag.OPENCODE_FAKE_VCS)
+      const fakeVcs = Info.shape.vcs.parse(Flag.SOCRATICODE_FAKE_VCS)
 
       const resolveGitPath = (cwd: string, name: string) => {
         if (!name) return cwd
@@ -257,7 +257,7 @@ export namespace Project {
               time: { created: Date.now(), updated: Date.now() },
             }
 
-        if (Flag.OPENCODE_EXPERIMENTAL_ICON_DISCOVERY)
+        if (Flag.SOCRATICODE_EXPERIMENTAL_ICON_DISCOVERY)
           yield* discover(existing).pipe(Effect.ignore, Effect.forkIn(scope))
 
         const result: Info = {

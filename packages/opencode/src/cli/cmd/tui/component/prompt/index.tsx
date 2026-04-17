@@ -28,6 +28,11 @@ import type { AssistantMessage, FilePart, UserMessage } from "@opencode-ai/sdk/v
 import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
 import { Locale } from "@/util/locale"
+import { SocraticDB } from "@/socratic/db"
+import { Calibration } from "@/socratic/calibration"
+import { Levels } from "@/socratic/levels"
+import { Modes } from "@/socratic/modes"
+import { SocraticIntegration } from "@/socratic/integration"
 import { formatDuration } from "@/util/format"
 import { createColors, createFrames } from "../../ui/spinner.ts"
 import { useDialog } from "@tui/ui/dialog"
@@ -588,6 +593,139 @@ export function Prompt(props: PromptProps) {
     },
   ])
 
+  // ── Socratic Slash Commands ────────────────────────────────
+  const SOCRATIC_COMMANDS = new Set([
+    "level", "mode", "hint", "slower", "despacio", "faster", "rapido",
+    "challenge", "desafio", "profile", "perfil", "weakness", "debilidades",
+    "strengths", "fortalezas",
+    "teach", "endteach",
+    "journal",
+    "up", "down", "top", "bottom",
+  ])
+
+  function socraticSlashCommand(cmdName: string, args: string): boolean {
+    if (!SOCRATIC_COMMANDS.has(cmdName)) return false
+
+    try {
+      switch (cmdName) {
+        case "level": {
+          const trimmed = args.trim().toLowerCase()
+          if (!trimmed) {
+            const info = SocraticIntegration.getCurrentLevel("")
+            if (info) {
+              const override = (() => { try { return Calibration.isOverrideActive() ? " (manual)" : "" } catch { return "" } })()
+              toast.show({ variant: "info", message: `Current level: ${info.level} - ${info.name}${override}` })
+            } else {
+              toast.show({ variant: "info", message: "No profile. Start a session to calibrate." })
+            }
+          } else if (trimmed === "auto") {
+            SocraticDB.updateProfile({ user_override: 0, override_sessions_count: 0 })
+            toast.show({ variant: "info", message: "Level: automatic adjustment enabled" })
+          } else {
+            const num = parseInt(trimmed, 10)
+            if (Levels.isValidLevel(num)) {
+              Calibration.setManualLevel(num)
+              toast.show({ variant: "info", message: `Level changed to ${num} - ${Levels.getProfile(num).label}` })
+            } else {
+              toast.show({ variant: "warning", message: "Use /level 1-5 or /level auto" })
+            }
+          }
+          return true
+        }
+        case "mode": {
+          const trimmed = args.trim()
+          if (!trimmed) {
+            const profile = SocraticDB.getProfile()
+            const mode = profile?.preferred_mode ?? "learn"
+            toast.show({ variant: "info", message: `Current mode: ${mode === "learn" ? "Learn" : "Productive"}` })
+          } else {
+            const parsed = Modes.parseMode(trimmed)
+            if (parsed) {
+              SocraticDB.updateProfile({ preferred_mode: parsed })
+              toast.show({ variant: "info", message: `Mode: ${parsed === "learn" ? "Learn" : "Productive"}` })
+            } else {
+              toast.show({ variant: "warning", message: "Use /mode learn or /mode productive" })
+            }
+          }
+          return true
+        }
+        case "hint":
+          toast.show({ variant: "info", message: "Hint requested. More help on the next turn." })
+          return true
+        case "slower":
+        case "despacio":
+          toast.show({ variant: "info", message: "I'll slow down the explanations." })
+          return true
+        case "faster":
+        case "rapido":
+          toast.show({ variant: "info", message: "I'll be more direct and concise." })
+          return true
+        case "challenge":
+        case "desafio":
+          toast.show({ variant: "info", message: "Challenge mode activated for the next turn." })
+          return true
+        case "profile":
+        case "perfil":
+          command.trigger("socratic.profile")
+          return true
+        case "weakness":
+        case "debilidades":
+          command.trigger("socratic.weakness")
+          return true
+        case "strengths":
+        case "fortalezas":
+          command.trigger("socratic.strengths")
+          return true
+        case "teach": {
+          const topic = args.trim()
+          if (!topic) {
+            toast.show({ variant: "warning", message: "Usage: /teach <topic> — e.g. /teach closures" })
+            return true
+          }
+          SocraticIntegration.startTeach(props.sessionID, topic)
+          toast.show({
+            variant: "info",
+            message: `Feynman mode on "${topic}". Now YOU explain — the agent will probe.`,
+          })
+          return true
+        }
+        case "endteach": {
+          const summary = SocraticIntegration.endTeach(props.sessionID)
+          if (summary) {
+            toast.show({ variant: "info", message: summary })
+          } else {
+            toast.show({ variant: "info", message: "No active teach-mode." })
+          }
+          return true
+        }
+        case "journal": {
+          const sub = args.trim().toLowerCase()
+          if (sub === "week") command.trigger("socratic.journal.week")
+          else if (sub === "month") command.trigger("socratic.journal.month")
+          else command.trigger("socratic.journal")
+          return true
+        }
+        case "up":
+          command.trigger("session.page.up")
+          return true
+        case "down":
+          command.trigger("session.page.down")
+          return true
+        case "top":
+          command.trigger("session.first")
+          return true
+        case "bottom":
+          command.trigger("session.last")
+          return true
+        default:
+          return false
+      }
+    } catch {
+      toast.show({ variant: "error", message: "Error processing socratic command" })
+      return true
+    }
+  }
+
   async function submit() {
     // IME: double-defer may fire before onContentChange flushes the last
     // composed character (e.g. Korean hangul) to the store, so read
@@ -600,6 +738,22 @@ export function Prompt(props: PromptProps) {
     if (autocomplete?.visible) return
     if (!store.prompt.input) return
     const trimmed = store.prompt.input.trim()
+
+    // ── Scroll commands: handle and return immediately (no onSubmit/toBottom) ──
+    if (trimmed === "/up" || trimmed === "/down" || trimmed === "/top" || trimmed === "/bottom") {
+      const scrollCmd = trimmed.slice(1)
+      if (scrollCmd === "up") command.trigger("session.page.up")
+      else if (scrollCmd === "down") command.trigger("session.page.down")
+      else if (scrollCmd === "top") command.trigger("session.first")
+      else if (scrollCmd === "bottom") command.trigger("session.last")
+      // Clear input without triggering onSubmit
+      setStore("prompt", { input: "", parts: [] })
+      setStore("extmarkToPartIndex", new Map())
+      if (input && !input.isDestroyed) {
+        input.clear()
+      }
+      return // EXIT: no onSubmit, no toBottom
+    }
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
       exit()
       return
@@ -667,6 +821,15 @@ export function Prompt(props: PromptProps) {
         command: inputText,
       })
       setStore("mode", "normal")
+    } else if (
+      inputText.startsWith("/") &&
+      iife(() => {
+        const firstLine = inputText.split("\n")[0]
+        const cmdName = firstLine.split(" ")[0].slice(1)
+        return socraticSlashCommand(cmdName, firstLine.split(" ").slice(1).join(" "))
+      })
+    ) {
+      // Socratic command was handled
     } else if (
       inputText.startsWith("/") &&
       iife(() => {
@@ -977,6 +1140,21 @@ export function Prompt(props: PromptProps) {
                 }
                 if (store.mode === "normal") autocomplete.onKeyDown(e)
                 if (!autocomplete.visible) {
+                  // Scroll messages when prompt is empty and arrow up/down pressed
+                  if (
+                    input.plainText.trim() === "" &&
+                    (keybind.match("history_previous", e) || keybind.match("history_next", e))
+                  ) {
+                    const isUp = keybind.match("history_previous", e)
+                    if (isUp) {
+                      command.trigger("session.page.up")
+                    } else {
+                      command.trigger("session.page.down")
+                    }
+                    e.preventDefault()
+                    return
+                  }
+
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
                     (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
