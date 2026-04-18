@@ -166,34 +166,21 @@ export const SetupCommand = cmd({
     // Step 3: Sort models by size (smaller first for easier selection)
     const sorted = [...models].sort((a, b) => a.size - b.size)
 
-    // Step 4: Let user pick models
-    const selected = await prompts.multiselect({
-      message: "Which models do you want to use? (space to select, enter to confirm)",
+    // Step 4: Pick one model — just arrows + enter, no space-toggling.
+    // Users who want more than one can add entries to socraticode.json by
+    // hand or re-run setup. One default is what 99% of the flow needs.
+    const picked = await prompts.select({
+      message: "Pick the model to use (arrows + enter):",
       options: sorted.map((m) => ({
         label: `${m.name} (${formatSize(m.size)})`,
         value: m.name,
       })),
-      required: true,
     })
-    if (prompts.isCancel(selected)) throw new UI.CancelledError()
+    if (prompts.isCancel(picked)) throw new UI.CancelledError()
+    const defaultModel: string = picked as string
+    const selected: string[] = [defaultModel]
 
-    // Step 5: Pick default model
-    let defaultModel: string
-    if (selected.length === 1) {
-      defaultModel = selected[0]
-    } else {
-      const def = await prompts.select({
-        message: "Which one do you want as the main model?",
-        options: selected.map((name) => ({
-          label: name,
-          value: name,
-        })),
-      })
-      if (prompts.isCancel(def)) throw new UI.CancelledError()
-      defaultModel = def
-    }
-
-    // Step 6: Build and save config
+    // Step 5: Build and save config
     const existingConfig = loadExistingConfig()
 
     const modelEntries: Record<string, any> = {}
@@ -258,8 +245,9 @@ export const SetupCommand = cmd({
     prompts.log.success(`Config saved to: ${configPath}`)
     prompts.log.info(`Main model: ${providerId}/${defaultModel}`)
     prompts.log.info(`Provider "opencode" disabled (we use Ollama)`)
-    prompts.log.info(`To start: bun run dev`)
+    prompts.log.info(`To add more models later, edit "provider.${providerId}.models" in the config file.`)
+    prompts.log.info(`To start: socraticode  (or 'bun run dev')`)
 
-    prompts.outro("Setup complete! Run 'bun run dev' to start.")
+    prompts.outro("Setup complete!")
   },
 })
