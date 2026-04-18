@@ -4,20 +4,33 @@ import path from "path"
 import { pathToFileURL, fileURLToPath } from "url"
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node"
 import type { Diagnostic as VSCodeDiagnostic } from "vscode-languageserver-types"
+import { Effect } from "effect"
 import { Log } from "../util"
 import { Process } from "../util"
 import { LANGUAGE_EXTENSIONS } from "./language"
 import z from "zod"
 import type * as LSPServer from "./server"
 import { NamedError } from "@opencode-ai/shared/util/error"
-import { withTimeout } from "../util/timeout"
+import { Instance } from "../project/instance"
 import { Filesystem } from "../util"
 
 const DIAGNOSTICS_DEBOUNCE_MS = 150
 
 const log = Log.create({ service: "lsp.client" })
 
-export type Info = NonNullable<Awaited<ReturnType<typeof create>>>
+type Connection = ReturnType<typeof createMessageConnection>
+
+export interface Info {
+  readonly root: string
+  readonly serverID: string
+  readonly connection: Connection
+  readonly notify: {
+    readonly open: (input: { path: string }) => Effect.Effect<void>
+  }
+  readonly diagnostics: Map<string, Diagnostic[]>
+  readonly waitForDiagnostics: (input: { path: string }) => Effect.Effect<void>
+  readonly shutdown: () => Effect.Effect<void>
+}
 
 export type Diagnostic = VSCodeDiagnostic
 
@@ -38,7 +51,11 @@ export const Event = {
   ),
 }
 
-export async function create(input: { serverID: string; server: LSPServer.Handle; root: string; directory: string }) {
+export const create = Effect.fn("LSPClient.create")(function* (input: {
+  serverID: string
+  server: LSPServer.Handle
+  root: string
+}) {
   const l = log.clone().tag("serverID", input.serverID)
   l.info("starting client")
 
@@ -63,10 +80,7 @@ export async function create(input: { serverID: string; server: LSPServer.Handle
     l.info("window/workDoneProgress/create", params)
     return null
   })
-  connection.onRequest("workspace/configuration", async () => {
-    // Return server initialization options
-    return [input.server.initialization ?? {}]
-  })
+  connection.onRequest("workspace/configuration", async () => [input.server.initialization ?? {}])
   connection.onRequest("client/registerCapability", async () => {})
   connection.onRequest("client/unregisterCapability", async () => {})
   connection.onRequest("workspace/workspaceFolders", async () => [
@@ -78,7 +92,7 @@ export async function create(input: { serverID: string; server: LSPServer.Handle
   connection.listen()
 
   l.info("sending initialize")
-  await withTimeout(
+  yield* Effect.tryPromise(() =>
     connection.sendRequest("initialize", {
       rootUri: pathToFileURL(input.root).href,
       processId: input.server.process.pid,
@@ -112,30 +126,123 @@ export async function create(input: { serverID: string; server: LSPServer.Handle
         },
       },
     }),
-    45_000,
-  ).catch((err) => {
-    l.error("initialize error", { error: err })
-    throw new InitializeError(
-      { serverID: input.serverID },
-      {
-        cause: err,
-      },
-    )
-  })
+  ).pipe(
+    Effect.timeout(45_000),
+    Effect.mapError((cause) => new InitializeError({ serverID: input.serverID }, { cause })),
+    Effect.tapError((error) => Effect.sync(() => l.error("initialize error", { error }))),
+  )
 
-  await connection.sendNotification("initialized", {})
+  yield* Effect.tryPromise(() => connection.sendNotification("initialized", {}))
 
   if (input.server.initialization) {
-    await connection.sendNotification("workspace/didChangeConfiguration", {
-      settings: input.server.initialization,
-    })
+    yield* Effect.tryPromise(() =>
+      connection.sendNotification("workspace/didChangeConfiguration", {
+        settings: input.server.initialization,
+      }),
+    )
   }
 
-  const files: {
-    [path: string]: number
-  } = {}
+  const files: Record<string, number> = {}
 
-  const result = {
+  const open = Effect.fn("LSPClient.notify.open")(function* (next: { path: string }) {
+    next.path = path.isAbsolute(next.path) ? next.path : path.resolve(Instance.directory, next.path)
+    const text = yield* Effect.promise(() => Filesystem.readText(next.path)).pipe(Effect.orDie)
+    const extension = path.extname(next.path)
+    const languageId = LANGUAGE_EXTENSIONS[extension] ?? "plaintext"
+
+    const version = files[next.path]
+    if (version !== undefined) {
+      log.info("workspace/didChangeWatchedFiles", next)
+      yield* Effect.tryPromise(() =>
+        connection.sendNotification("workspace/didChangeWatchedFiles", {
+          changes: [
+            {
+              uri: pathToFileURL(next.path).href,
+              type: 2,
+            },
+          ],
+        }),
+      ).pipe(Effect.orDie)
+
+      const nextVersion = version + 1
+      files[next.path] = nextVersion
+      log.info("textDocument/didChange", {
+        path: next.path,
+        version: nextVersion,
+      })
+      yield* Effect.tryPromise(() =>
+        connection.sendNotification("textDocument/didChange", {
+          textDocument: {
+            uri: pathToFileURL(next.path).href,
+            version: nextVersion,
+          },
+          contentChanges: [{ text }],
+        }),
+      ).pipe(Effect.orDie)
+      return
+    }
+
+    log.info("workspace/didChangeWatchedFiles", next)
+    yield* Effect.tryPromise(() =>
+      connection.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [
+          {
+            uri: pathToFileURL(next.path).href,
+            type: 1,
+          },
+        ],
+      }),
+    ).pipe(Effect.orDie)
+
+    log.info("textDocument/didOpen", next)
+    diagnostics.delete(next.path)
+    yield* Effect.tryPromise(() =>
+      connection.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: pathToFileURL(next.path).href,
+          languageId,
+          version: 0,
+          text,
+        },
+      }),
+    ).pipe(Effect.orDie)
+    files[next.path] = 0
+  })
+
+  const waitForDiagnostics = Effect.fn("LSPClient.waitForDiagnostics")(function* (next: { path: string }) {
+    const normalizedPath = Filesystem.normalizePath(
+      path.isAbsolute(next.path) ? next.path : path.resolve(Instance.directory, next.path),
+    )
+    log.info("waiting for diagnostics", { path: normalizedPath })
+    yield* Effect.callback<void>((resume) => {
+      let debounceTimer: ReturnType<typeof setTimeout> | undefined
+      const unsub = Bus.subscribe(Event.Diagnostics, (event) => {
+        if (event.properties.path !== normalizedPath || event.properties.serverID !== input.serverID) return
+        if (debounceTimer) clearTimeout(debounceTimer)
+        debounceTimer = setTimeout(() => {
+          log.info("got diagnostics", { path: normalizedPath })
+          resume(Effect.void)
+        }, DIAGNOSTICS_DEBOUNCE_MS)
+      })
+
+      return Effect.sync(() => {
+        if (debounceTimer) clearTimeout(debounceTimer)
+        unsub()
+      })
+    }).pipe(Effect.timeoutOption(3000), Effect.asVoid)
+  })
+
+  const shutdown = Effect.fn("LSPClient.shutdown")(function* () {
+    l.info("shutting down")
+    connection.end()
+    connection.dispose()
+    yield* Effect.promise(() => Process.stop(input.server.process)).pipe(Effect.orDie)
+    l.info("shutdown")
+  })
+
+  l.info("initialized")
+
+  return {
     root: input.root,
     get serverID() {
       return input.serverID
@@ -144,106 +251,12 @@ export async function create(input: { serverID: string; server: LSPServer.Handle
       return connection
     },
     notify: {
-      async open(request: { path: string }) {
-        request.path = path.isAbsolute(request.path) ? request.path : path.resolve(input.directory, request.path)
-        const text = await Filesystem.readText(request.path)
-        const extension = path.extname(request.path)
-        const languageId = LANGUAGE_EXTENSIONS[extension] ?? "plaintext"
-
-        const version = files[request.path]
-        if (version !== undefined) {
-          log.info("workspace/didChangeWatchedFiles", request)
-          await connection.sendNotification("workspace/didChangeWatchedFiles", {
-            changes: [
-              {
-                uri: pathToFileURL(request.path).href,
-                type: 2, // Changed
-              },
-            ],
-          })
-
-          const next = version + 1
-          files[request.path] = next
-          log.info("textDocument/didChange", {
-            path: request.path,
-            version: next,
-          })
-          await connection.sendNotification("textDocument/didChange", {
-            textDocument: {
-              uri: pathToFileURL(request.path).href,
-              version: next,
-            },
-            contentChanges: [{ text }],
-          })
-          return
-        }
-
-        log.info("workspace/didChangeWatchedFiles", request)
-        await connection.sendNotification("workspace/didChangeWatchedFiles", {
-          changes: [
-            {
-              uri: pathToFileURL(request.path).href,
-              type: 1, // Created
-            },
-          ],
-        })
-
-        log.info("textDocument/didOpen", request)
-        diagnostics.delete(request.path)
-        await connection.sendNotification("textDocument/didOpen", {
-          textDocument: {
-            uri: pathToFileURL(request.path).href,
-            languageId,
-            version: 0,
-            text,
-          },
-        })
-        files[request.path] = 0
-        return
-      },
+      open,
     },
     get diagnostics() {
       return diagnostics
     },
-    async waitForDiagnostics(request: { path: string }) {
-      const normalizedPath = Filesystem.normalizePath(
-        path.isAbsolute(request.path) ? request.path : path.resolve(input.directory, request.path),
-      )
-      log.info("waiting for diagnostics", { path: normalizedPath })
-      let unsub: () => void
-      let debounceTimer: ReturnType<typeof setTimeout> | undefined
-      return await withTimeout(
-        new Promise<void>((resolve) => {
-          unsub = Bus.subscribe(Event.Diagnostics, (event) => {
-            if (event.properties.path === normalizedPath && event.properties.serverID === result.serverID) {
-              // Debounce to allow LSP to send follow-up diagnostics (e.g., semantic after syntax)
-              if (debounceTimer) clearTimeout(debounceTimer)
-              debounceTimer = setTimeout(() => {
-                log.info("got diagnostics", { path: normalizedPath })
-                unsub?.()
-                resolve()
-              }, DIAGNOSTICS_DEBOUNCE_MS)
-            }
-          })
-        }),
-        3000,
-      )
-        .catch(() => {})
-        .finally(() => {
-          if (debounceTimer) clearTimeout(debounceTimer)
-          unsub?.()
-        })
-    },
-    async shutdown() {
-      l.info("shutting down")
-      connection.end()
-      connection.dispose()
-      await Process.stop(input.server.process)
-      l.info("shutdown")
-    },
-  }
-
-  l.info("initialized")
-
-  return result
-}
+    waitForDiagnostics,
+    shutdown,
+  } satisfies Info
+})

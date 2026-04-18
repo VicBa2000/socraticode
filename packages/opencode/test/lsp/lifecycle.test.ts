@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import path from "path"
-import { Effect, Layer } from "effect"
+import { Effect, Fiber, Layer, Scope } from "effect"
 import { LSP } from "../../src/lsp"
 import { LSPServer } from "../../src/lsp"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
@@ -151,6 +151,35 @@ describe("LSP service lifecycle", () => {
           yield* lsp.init()
         }),
       ),
+    ),
+  )
+
+  it.live("touchFile() dedupes concurrent spawn attempts for the same file", () =>
+    provideTmpdirInstance(
+      (dir) =>
+        LSP.Service.use((lsp) =>
+          Effect.gen(function* () {
+            const gate = Promise.withResolvers<void>()
+            const scope = yield* Scope.Scope
+            const file = path.join(dir, "src", "inside.ts")
+
+            spawnSpy.mockImplementation(async () => {
+              await gate.promise
+              return undefined
+            })
+
+            const fiber = yield* Effect.all([lsp.touchFile(file, false), lsp.touchFile(file, false)], {
+              concurrency: "unbounded",
+            }).pipe(Effect.forkIn(scope))
+
+            yield* Effect.sleep(20)
+            expect(spawnSpy).toHaveBeenCalledTimes(1)
+
+            gate.resolve()
+            yield* Fiber.join(fiber)
+          }),
+        ),
+      { config: { lsp: true } },
     ),
   )
 })
