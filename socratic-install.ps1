@@ -104,13 +104,18 @@ if (-not (Test-Path $PROFILE)) {
 # would operate on the repo directory instead of the user's current dir.
 $marker     = "# >>> socraticode (fork install) >>>"
 $markerEnd  = "# <<< socraticode (fork install) <<<"
+$EntryPoint = Join-Path $PkgDir "src\index.ts"
 $functionBody = @"
 $marker
 function socraticode {
+  # Call the entrypoint directly instead of the package.json 'dev' script:
+  # 'bun run <script-name> --cwd X' rewrites process.env.PWD to X, which
+  # makes the TUI forget the user's actual working directory.
+  # 'bun run --cwd X <abs-path.ts>' keeps PWD inherited from the shell.
   `$__sc_prev = if (Test-Path Env:PWD) { `$env:PWD } else { `$null }
   `$env:PWD = `$PWD.Path
   try {
-    bun run --cwd "$PkgDir" dev @args
+    bun run --cwd "$PkgDir" --conditions=browser "$EntryPoint" @args
   } finally {
     if (`$null -ne `$__sc_prev) { `$env:PWD = `$__sc_prev }
     else { Remove-Item Env:PWD -ErrorAction SilentlyContinue }

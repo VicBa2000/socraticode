@@ -124,7 +124,11 @@ MARKER_END="# <<< socraticode (fork install) <<<"
 read -r -d '' FUNC_BLOCK <<EOF || true
 $MARKER_START
 socraticode() {
-  PWD="\$PWD" command bun run --cwd "$PKG_DIR" dev "\$@"
+  # Call the entrypoint directly instead of the package.json 'dev' script:
+  # 'bun run <script-name> --cwd X' rewrites process.env.PWD to X, which
+  # makes the TUI forget the user's actual working directory.
+  # 'bun run --cwd X <abs-path.ts>' keeps PWD inherited from the shell.
+  bun run --cwd "$PKG_DIR" --conditions=browser "$PKG_DIR/src/index.ts" "\$@"
 }
 $MARKER_END
 EOF
