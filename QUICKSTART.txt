@@ -198,14 +198,18 @@ RESET YOUR PROFILE (wipe calibration + session history)
 
 UNINSTALL THE FORK ADDITIONS
 
-  1. Remove the global alias:
+  1. Remove the global command:
 
-     Linux / macOS: open ~/.bashrc (or ~/.zshrc) and delete the line that
-     starts with `alias socraticode=`.
+     Open your shell config in a text editor and delete the block
+     bounded by the markers:
+       # >>> socraticode (fork install) >>>
+       ... (function body) ...
+       # <<< socraticode (fork install) <<<
 
-     Windows PowerShell: open `$PROFILE` in a text editor and delete the
-     block between the `# >>> socraticode (fork install) >>>` and
-     `# <<< socraticode (fork install) <<<` markers.
+     Files by shell:
+       Linux / macOS (bash):  ~/.bashrc
+       Linux / macOS (zsh):   ~/.zshrc
+       Windows PowerShell:    $PROFILE   (run 'echo $PROFILE' to locate it)
 
   2. Delete the DBs and config (see RESET section above, plus):
 

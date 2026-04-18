@@ -106,28 +106,52 @@ case "${SHELL:-}" in
   */zsh)  RC_FILE="$HOME/.zshrc" ;;
   */bash) RC_FILE="$HOME/.bashrc" ;;
   *)
-    # Best guess
     if   [ -f "$HOME/.zshrc"  ]; then RC_FILE="$HOME/.zshrc"
     elif [ -f "$HOME/.bashrc" ]; then RC_FILE="$HOME/.bashrc"
-    else RC_FILE="$HOME/.bashrc"  # create if missing
+    else RC_FILE="$HOME/.bashrc"
     fi
     ;;
 esac
 
-ALIAS_LINE="alias socraticode=\"bun run --cwd '$PKG_DIR' dev\""
+MARKER_START="# >>> socraticode (fork install) >>>"
+MARKER_END="# <<< socraticode (fork install) <<<"
+
+# Shell function (not an alias) so we can forward PWD to bun.
+# Why: 'bun run --cwd <pkg>' changes process.cwd() to the package dir,
+# but the TUI resolves its working directory from $PWD first. Keeping
+# PWD pointed at the user's current shell dir makes SocraticCode operate
+# on the directory the user launched from, not on the repo itself.
+read -r -d '' FUNC_BLOCK <<EOF || true
+$MARKER_START
+socraticode() {
+  PWD="\$PWD" command bun run --cwd "$PKG_DIR" dev "\$@"
+}
+$MARKER_END
+EOF
 
 touch "$RC_FILE"
+
+# Strip any prior install artifacts (old alias line + old marker block).
 if grep -qF "alias socraticode=" "$RC_FILE" 2>/dev/null; then
-  # Replace existing line
   if [ "$OS" = "macos" ]; then
     sed -i '' "\|alias socraticode=|d" "$RC_FILE"
   else
     sed -i "\|alias socraticode=|d" "$RC_FILE"
   fi
-  warn "Replaced existing 'socraticode' alias in $RC_FILE"
+  warn "Removed legacy 'alias socraticode=' from $RC_FILE"
 fi
-echo "$ALIAS_LINE" >> "$RC_FILE"
-ok "Added alias to $RC_FILE"
+if grep -qF "$MARKER_START" "$RC_FILE" 2>/dev/null; then
+  # Delete everything between markers (inclusive)
+  if [ "$OS" = "macos" ]; then
+    sed -i '' "\|$MARKER_START|,\|$MARKER_END|d" "$RC_FILE"
+  else
+    sed -i "\|$MARKER_START|,\|$MARKER_END|d" "$RC_FILE"
+  fi
+  warn "Replaced existing 'socraticode' function block in $RC_FILE"
+fi
+
+printf '\n%s\n' "$FUNC_BLOCK" >> "$RC_FILE"
+ok "Added 'socraticode' function to $RC_FILE"
 
 echo
 info "Reload your shell to pick up the alias:"

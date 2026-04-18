@@ -393,11 +393,16 @@ RELEVANT ENVIRONMENT VARIABLES
 
 UNINSTALLING THE FORK ADDITIONS
 
-  1. Remove the global alias:
-       Linux / macOS: delete the line starting with `alias socraticode=`
-       from ~/.bashrc or ~/.zshrc.
-       Windows PowerShell: open $PROFILE and delete the block between the
-       `# >>> socraticode (fork install) >>>` and `# <<<` markers.
+  1. Remove the global command:
+       All platforms use the same marker-bounded block in your shell config:
+         # >>> socraticode (fork install) >>>
+         ... function body ...
+         # <<< socraticode (fork install) <<<
+
+       Files by shell:
+         Linux / macOS (bash):  ~/.bashrc
+         Linux / macOS (zsh):   ~/.zshrc
+         Windows PowerShell:    $PROFILE
 
   2. Delete the fork-specific files:
        rm ~/.config/socraticode/socraticode.json

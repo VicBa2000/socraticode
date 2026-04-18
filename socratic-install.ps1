@@ -97,12 +97,25 @@ if (-not (Test-Path $PROFILE)) {
   New-Item -ItemType File -Path $PROFILE -Force | Out-Null
 }
 
-# PowerShell doesn't do aliases with arguments well — use a function.
+# PowerShell function so we can forward PWD to bun.
+# Why: 'bun run --cwd <pkg>' changes process.cwd() to the package dir,
+# but the TUI resolves its working directory from $env:PWD first.
+# PowerShell does not auto-export PWD, so without this wrapper the TUI
+# would operate on the repo directory instead of the user's current dir.
 $marker     = "# >>> socraticode (fork install) >>>"
 $markerEnd  = "# <<< socraticode (fork install) <<<"
 $functionBody = @"
 $marker
-function socraticode { bun run --cwd "$PkgDir" dev @args }
+function socraticode {
+  `$__sc_prev = if (Test-Path Env:PWD) { `$env:PWD } else { `$null }
+  `$env:PWD = `$PWD.Path
+  try {
+    bun run --cwd "$PkgDir" dev @args
+  } finally {
+    if (`$null -ne `$__sc_prev) { `$env:PWD = `$__sc_prev }
+    else { Remove-Item Env:PWD -ErrorAction SilentlyContinue }
+  }
+}
 $markerEnd
 "@
 
