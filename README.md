@@ -7,7 +7,7 @@
 </div>
 <p align="center">An adaptive, socratic fork of <a href="https://github.com/anomalyco/opencode">OpenCode</a> that teaches you to code instead of coding for you.</p>
 <p align="center">
-  <a href="https://github.com/VicBa2000/socraticode/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-341%20passing-brightgreen?style=flat-square" /></a>
+  <a href="https://github.com/VicBa2000/socraticode/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-345%20passing-brightgreen?style=flat-square" /></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" /></a>
   <a href="https://github.com/VicBa2000/socraticode/releases"><img alt="Version" src="https://img.shields.io/badge/version-1.0.0-orange?style=flat-square" /></a>
   <a href="https://github.com/anomalyco/opencode"><img alt="Forked from" src="https://img.shields.io/badge/forked%20from-OpenCode-purple?style=flat-square" /></a>
@@ -29,19 +29,42 @@ SocraticCode is currently a source install. Packaged distributions land in later
 # Requires Bun 1.3+ (https://bun.sh) and Git
 git clone https://github.com/VicBa2000/socraticode.git
 cd socraticode
-bun install
-bun run --cwd packages/opencode dev setup     # interactive Ollama setup wizard
-bun run --cwd packages/opencode dev            # start the TUI
 ```
 
-On first launch, you're asked to pick your initial level (1–5). From there, SocraticCode adapts automatically.
+Then run the fork installer:
 
-To build a standalone binary:
+```bash
+# Linux / macOS / Git Bash
+./socratic-install.sh
+
+# Windows PowerShell
+.\socratic-install.ps1
+```
+
+The script does three things, asking before each one:
+
+1. Runs `bun install` if dependencies aren't present yet (OpenCode base step — offered for convenience, you can also run it manually first).
+2. Launches the interactive Ollama setup wizard (choose Local or Cloud, single-select the model you want as default).
+3. Installs a `socraticode` global command in your shell (bash / zsh function, or PowerShell function). Works from any directory.
+
+After reloading your shell (`source ~/.bashrc` or `. $PROFILE`):
+
+```bash
+socraticode                                  # start the TUI from anywhere
+socraticode run -m <provider/model> "..."    # one-shot
+socraticode benchmark <provider/model>       # probe a model's fitness
+```
+
+On first TUI launch you pick your initial level (1–5). From there, SocraticCode adapts automatically.
+
+To build a standalone binary (optional, no Bun needed at runtime):
 
 ```bash
 bun run --cwd packages/opencode build --single
-# → dist/socraticode-<platform>/bin/opencode
+# → dist/socraticode-<platform>/bin/opencode[.exe]
 ```
+
+See [`QUICKSTART.txt`](QUICKSTART.txt) for platform-specific details and how to expose the binary as `socraticode` on your PATH.
 
 ### Socratic layer
 
@@ -142,7 +165,7 @@ If you're working on a project that uses "socraticode" as part of its name (e.g.
 
 #### Does this send my data anywhere?
 
-No. All pedagogical state is local SQLite at `~/.local/share/socraticode/opencode-local.db`. LLM calls go wherever you configured them (Ollama local stays local; cloud providers follow their policies). The tracking never leaves your machine.
+No. All pedagogical state is local SQLite at `~/.local/share/socraticode/` — either `opencode-local.db` (when launched via the dev wrapper / shell alias) or `socraticode.db` (when launched from the compiled standalone binary). Same schema in both. LLM calls go wherever you configured them (Ollama local stays local; cloud providers follow their policies). The tracking never leaves your machine.
 
 #### Why a fork instead of a plugin?
 
@@ -150,7 +173,7 @@ OpenCode's public plugin API isn't rich enough to hook the agent loop, inject sy
 
 #### Will you rebase on OpenCode?
 
-Yes. Upstream is tracked and periodically merged. See [CONTRIBUTING.md](CONTRIBUTING.md) for the upstream pull procedure.
+Yes. Upstream is tracked via the `upstream` git remote (`anomalyco/opencode`) and merged on a 2–4 week cadence to keep conflict cost low. The socratic layer lives almost entirely in `src/socratic/` with a few well-scoped hooks in `session/prompt.ts`, `session/llm.ts`, `session/processor.ts` and `tool/registry.ts`, which makes each sync tractable. See [CONTRIBUTING.md](CONTRIBUTING.md) for the upstream pull procedure.
 
 ### Credits
 
