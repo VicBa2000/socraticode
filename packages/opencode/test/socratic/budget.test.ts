@@ -132,6 +132,45 @@ describe("Budget.trimHistory", () => {
     const r = Budget.trimHistory(messages, -100)
     expect(r.messages.some((m) => m.pinned)).toBe(true)
   })
+
+  test("never leaves a tool message orphaned from its assistant", () => {
+    // Regression for:
+    //   Bad Request: Unexpected role 'tool' after role 'system'
+    // when trimHistory drops an assistant tool_call but keeps its tool_result.
+    const messages = [
+      msg("user", "a".repeat(400)),      // ~104 tokens
+      msg("assistant", "a".repeat(400)), // with tool_call
+      msg("tool", "a".repeat(400)),      // tool_result for ^
+      msg("user", "a".repeat(400), true),// latest user, pinned
+    ]
+    const r = Budget.trimHistory(messages, 150) // force aggressive trim
+    const roles = r.messages.map((m) => m.role)
+    // If any tool survives, there MUST be an assistant right before it.
+    roles.forEach((role, i) => {
+      if (role === "tool") {
+        expect(i).toBeGreaterThan(0)
+        expect(roles[i - 1]).toBe("assistant")
+      }
+    })
+  })
+
+  test("drops assistant + its tool_results as a single block", () => {
+    const messages = [
+      msg("user", "u1"),
+      msg("assistant", "a1 with tool_call"),
+      msg("tool", "r1"),
+      msg("tool", "r2"),
+      msg("assistant", "a2 final"),
+      msg("user", "u2 latest", true),
+    ]
+    // Tight budget: the block a1+tool+tool should drop together, never partially.
+    const r = Budget.trimHistory(messages, 20)
+    const sawAssistantWithToolCall = r.messages.some((m) => m.content === "a1 with tool_call")
+    const sawOrphanToolResult =
+      r.messages.some((m) => m.content === "r1" || m.content === "r2") &&
+      !sawAssistantWithToolCall
+    expect(sawOrphanToolResult).toBe(false)
+  })
 })
 
 describe("Budget.warningFor", () => {

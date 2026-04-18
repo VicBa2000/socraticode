@@ -108,6 +108,12 @@ export namespace Budget {
    * under `budget`. Always keeps pinned messages; always keeps the latest
    * user message implicitly if callers mark it pinned.
    *
+   * Treats each assistant message together with its immediately-following
+   * `tool` messages as a single atomic block. This prevents a truncation
+   * that would leave an orphan `tool` message without its preceding
+   * assistant tool_call — which Anthropic, Ollama, and most OpenAI-compat
+   * providers reject with "Unexpected role 'tool' after role 'system'".
+   *
    * Stable: preserves the relative order of what remains.
    */
   export function trimHistory<T extends TrimmableMessage>(
@@ -121,16 +127,33 @@ export namespace Budget {
       return { messages: [...messages], dropped: 0, finalTokens: total, trimmed: false }
     }
 
-    // Walk from oldest to newest, dropping non-pinned until we fit.
-    // We keep a list of "indices to drop" then filter.
+    // Group contiguous messages into atomic blocks:
+    //   - assistant + following tool messages -> single block
+    //   - any other role -> single-message block
+    // If a block contains any pinned message, the whole block is pinned.
+    type Block = { indices: number[]; pinned: boolean; tokens: number }
+    const blocks: Block[] = []
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i]!
+      const cost = estimateTokens(m.content) + 4
+      const last = blocks[blocks.length - 1]
+      if (m.role === "tool" && last) {
+        last.indices.push(i)
+        last.tokens += cost
+        if (m.pinned) last.pinned = true
+      } else {
+        blocks.push({ indices: [i], pinned: !!m.pinned, tokens: cost })
+      }
+    }
+
+    // Drop whole blocks oldest-to-newest until we fit or run out.
     const drop = new Set<number>()
     let remaining = total
-    for (let i = 0; i < messages.length; i++) {
+    for (const block of blocks) {
       if (remaining <= budgetTokens) break
-      const m = messages[i]!
-      if (m.pinned) continue
-      drop.add(i)
-      remaining -= estimateTokens(m.content) + 4
+      if (block.pinned) continue
+      for (const idx of block.indices) drop.add(idx)
+      remaining -= block.tokens
     }
 
     const kept = messages.filter((_, i) => !drop.has(i))
