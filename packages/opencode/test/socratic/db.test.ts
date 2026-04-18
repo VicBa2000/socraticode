@@ -8,7 +8,7 @@ beforeEach(() => {
 
 describe("SocraticDB.profile", () => {
   test("getProfile returns null when empty", () => {
-    expect(SocraticDB.getProfile()).toBe(null)
+    expect(SocraticDB.getProfile()).toBeNull()
   })
 
   test("ensureProfile creates default row", () => {

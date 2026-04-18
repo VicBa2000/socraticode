@@ -62,7 +62,7 @@ describe("ToolSchemaMarkdown.render", () => {
   })
 
   test("is shorter than a JSON Schema encoding", () => {
-    const tools = [
+    const tools: ToolSchemaMarkdown.ToolDefinition[] = [
       {
         name: "read",
         description: "Read a file",

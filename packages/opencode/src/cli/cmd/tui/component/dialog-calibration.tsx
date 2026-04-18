@@ -21,8 +21,8 @@ export function DialogCalibration() {
     { level: 5 as const, label: "Expert", desc: "I master multiple technologies. I just need a colleague." },
   ]
 
-  useKeyboard((key) => {
-    const num = parseInt(key, 10)
+  useKeyboard((evt) => {
+    const num = parseInt(evt.name ?? "", 10)
     if (num >= 1 && num <= 5) {
       try {
         Calibration.completeInitialCalibration(num as Levels.UserLevel)
@@ -33,18 +33,17 @@ export function DialogCalibration() {
       } catch {
         toast.show({ variant: "error", message: "Error setting level" })
       }
-      return true
+      return
     }
-    if (key === "escape") {
+    if (evt.name === "escape") {
       // Default to level 3 (intermediate) if user skips
       try {
         Calibration.completeInitialCalibration(3)
         toast.show({ variant: "info", message: "Default level: 3 - Intermediate. Use /level to change." })
       } catch {}
       dialog.clear()
-      return true
+      return
     }
-    return false
   })
 
   return (

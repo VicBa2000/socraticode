@@ -1494,7 +1494,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               // Small local models (3-8B) drown in it and start listing skill
               // names back at the user instead of answering. Strong models
               // are unaffected and get the full skills briefing.
-              const socraticSkipSkills = SocraticIntegration.shouldUseLiteToolMode(model.modelID)
+              const socraticSkipSkills = SocraticIntegration.shouldUseLiteToolMode(model.id)
               const system = [
                 ...env,
                 ...(!socraticSkipSkills && skills ? [skills] : []),
@@ -1512,7 +1512,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               )
               const socraticSections = SocraticIntegration.buildSystemPrompt(
                 sessionID,
-                model.modelID,
+                model.id,
                 socraticToolList,
               )
               if (socraticSections.length > 0) {
@@ -1541,13 +1541,17 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               // we strip the AI SDK schemas entirely — the markdown tool
               // list already injected into `system` becomes the only tool
               // reference the model sees. Frees 1-2k tokens for the task.
-              const socraticLiteTools = SocraticIntegration.shouldUseLiteToolMode(model.modelID)
+              const socraticLiteTools = SocraticIntegration.shouldUseLiteToolMode(model.id)
               const effectiveTools = socraticLiteTools ? {} : tools
 
               // ── SocraticCode Phase 12d: budget trim ──
               // Estimate context load and trim the oldest non-user messages
               // if we're about to overflow the model's window.
-              const budgetMessages = modelMsgs.map((m) => {
+              const budgetMessages: Array<{
+                role: string
+                content: string
+                pinned?: boolean
+              }> = modelMsgs.map((m) => {
                 const content = typeof (m as any).content === "string"
                   ? ((m as any).content as string)
                   : JSON.stringify((m as any).content ?? "")
@@ -1562,7 +1566,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                 if (lastUserIdx !== undefined) budgetMessages[lastUserIdx]!.pinned = true
               }
               const budgetPlan = SocraticIntegration.planBudget(
-                model.modelID,
+                model.id,
                 system.join("\n"),
                 socraticLiteTools ? "" : JSON.stringify(tools),
                 budgetMessages,
@@ -1581,7 +1585,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                 log.info("socratic-budget-trim", {
                   warning: budgetPlan.warning,
                   dropped: budgetPlan.trim.dropped,
-                  modelID: model.modelID,
+                  modelID: model.id,
                 })
               }
 

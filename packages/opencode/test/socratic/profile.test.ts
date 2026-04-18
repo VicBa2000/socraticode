@@ -36,7 +36,7 @@ describe("Profile.updateStreak", () => {
   test("no-op when no profile", () => {
     // Does not throw
     Profile.updateStreak()
-    expect(SocraticDB.getProfile()).toBe(null)
+    expect(SocraticDB.getProfile()).toBeNull()
   })
 
   test("first session sets streak to 1", () => {
