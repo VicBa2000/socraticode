@@ -12,67 +12,150 @@ INSTALL (3 steps)
 
   1. Clone the repo and install dependencies:
 
-     git clone https://github.com/VicBa2000/socraticode.git
-     cd socraticode
-     bun install
+       git clone https://github.com/VicBa2000/socraticode.git
+       cd socraticode
+       bun install
 
-  2. Configure your LLM provider:
+     This creates the directory ./socraticode/ containing the monorepo.
+     All remaining commands are run from that directory.
 
-     bun run --cwd packages/opencode dev setup
+  2. Configure your LLM provider (interactive wizard):
 
-     Interactive wizard: choose between Ollama Cloud (free, with API key)
-     or Ollama Local (running on your machine at localhost:11434). Saves
-     the config to ~/.config/socraticode/socraticode.json.
+       bun run --cwd packages/opencode dev setup
+
+     The wizard asks:
+       a) Ollama Cloud (free, with API key from https://ollama.com/keys)
+          or Ollama Local (must already be running at localhost:11434).
+       b) Which models to enable.
+       c) Which one to use as the default.
+
+     The wizard saves the config to:
+       ~/.config/socraticode/socraticode.json                  (Linux / macOS)
+       %USERPROFILE%\.config\socraticode\socraticode.json      (Windows)
 
   3. Start the TUI:
 
-     bun run --cwd packages/opencode dev
+       bun run --cwd packages/opencode dev
 
-     First run prompts you to calibrate your level (1-5). Then you're in.
+     On first run you'll see a calibration dialog. Pick a level 1-5
+     (press the number key) or press ESC for the default (3 - Intermediate).
+     After that you're at the prompt — type and press Enter.
+
+
+MAKE `socraticode` A GLOBAL COMMAND
+
+  Pick ONE of the two options below so you can run `socraticode`
+  from any directory without typing `bun run --cwd ...` every time.
+
+  ── Option A — Shell alias (fastest, no build step) ──────────────
+
+  Linux / macOS (bash / zsh):
+       echo 'alias socraticode="bun run --cwd '"$(pwd)"'/packages/opencode dev"' >> ~/.bashrc
+       source ~/.bashrc
+     (replace ~/.bashrc with ~/.zshrc if you use zsh)
+
+  Windows PowerShell:
+       # 1) Open your PowerShell profile (create if missing):
+       if (!(Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force }
+       notepad $PROFILE
+
+       # 2) Add this line (adjust the path to where you cloned the repo):
+       function socraticode { bun run --cwd "C:\path\to\socraticode\packages\opencode" dev @args }
+
+       # 3) Save, close notepad, and reload:
+       . $PROFILE
+
+  Verify:
+       socraticode --version
+
+  ── Option B — Standalone binary (no Bun needed after build) ─────
+
+  1) Build:
+       bun run --cwd packages/opencode build --single
+
+  2) The binary lands at (platform-specific folder name):
+       packages/opencode/dist/socraticode-<platform>/bin/opencode      (Linux / macOS)
+       packages\opencode\dist\socraticode-windows-x64\bin\opencode.exe (Windows)
+
+  3) Expose it as `socraticode` on PATH:
+
+     Linux / macOS:
+       mkdir -p ~/.local/bin
+       ln -sf "$(pwd)/packages/opencode/dist/socraticode-linux-x64/bin/opencode" ~/.local/bin/socraticode
+       # macOS users: replace socraticode-linux-x64 with socraticode-darwin-arm64 (or -x64 on Intel)
+       # Make sure ~/.local/bin is on PATH — if not, add this to your rc file:
+       #   export PATH="$HOME/.local/bin:$PATH"
+
+     Windows PowerShell:
+       New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\bin" | Out-Null
+       Copy-Item packages\opencode\dist\socraticode-windows-x64\bin\opencode.exe `
+                 "$env:USERPROFILE\bin\socraticode.exe"
+       # Add %USERPROFILE%\bin to your User PATH (one time):
+       [Environment]::SetEnvironmentVariable(
+         "Path", "$env:USERPROFILE\bin;" + [Environment]::GetEnvironmentVariable("Path","User"), "User")
+       # Open a NEW terminal and verify:
+       #   socraticode --version
+
 
 BASIC USAGE
 
   Inside the TUI:
 
-  - Type your question/task and the mentor responds based on your level
-  - Use slash commands to control:
-      /level 3           change level
-      /mode productive   switch to fast mode
-      /profile           see your full profile
-      /journal           see your progress
-      /teach closures    enter Feynman mode (you explain)
-  - Arrow up/down (with prompt empty) to scroll
+    - Type your question/task and the mentor responds based on your level.
+    - Slash commands:
+        /level 3           change level (1-5)
+        /mode productive   switch to productive mode (less scaffolding)
+        /mode learn        switch back to learning mode
+        /profile           show your full pedagogical profile
+        /journal           show your progress (weekly / monthly)
+        /teach closures    enter Feynman mode (you explain, Socratic pushes back)
+    - Arrow up / down with the prompt empty scrolls the conversation.
 
-ONE-SHOT RUN FROM TERMINAL
+
+ONE-SHOT RUN (no TUI)
 
   bun run --cwd packages/opencode dev run -m ollama/qwen3:4b "your question"
   bun run --cwd packages/opencode dev run -m ollama-cloud/minimax-m2 "your question"
 
-BENCHMARK A MODEL (recommended before committing)
+  If you followed "MAKE GLOBAL" above, this becomes:
+    socraticode run -m ollama-cloud/minimax-m2 "your question"
+
+
+BENCHMARK A MODEL (recommended before committing to one)
 
   bun run --cwd packages/opencode dev benchmark ollama/qwen3:4b
+  bun run --cwd packages/opencode dev benchmark ollama-cloud/minimax-m2
+
+  Runs 5 probes (availability, instruction-following, JSON, tool-call,
+  context-recall) and scores the model's fitness for socratic use.
+
 
 RECOMMENDED MODELS
 
   Local:   qwen3:4b (minimum), gemma4 (recommended), qwen2.5-coder:32b (premium)
   Cloud:   claude-opus-4, gpt-5, gemini-1.5-pro, minimax-m2, any cloud
 
+
 NOT RECOMMENDED
 
-  llama3.2:3b, qwen2.5:3b, tinyllama, phi-3-mini: too small to handle
+  llama3.2:3b, qwen2.5:3b, tinyllama, phi-3-mini — too small to handle
   OpenCode's agent prompt. They hallucinate made-up tool names.
 
-STANDALONE BUILD (optional)
 
-  bun run --cwd packages/opencode build --single
+RESET YOUR PROFILE (wipe calibration + session history)
 
-  Produces a binary at:
-    dist/socraticode-<platform>/bin/opencode
+  Linux / macOS:
+       rm ~/.local/share/socraticode/opencode-local.db
+       rm ~/.local/share/socraticode/socraticode.db
 
-RESET YOUR PROFILE
+  Windows PowerShell:
+       Remove-Item "$env:LOCALAPPDATA\socraticode\opencode-local.db"
+       Remove-Item "$env:LOCALAPPDATA\socraticode\socraticode.db"
 
-  rm ~/.local/share/socraticode/opencode-local.db
-  (Windows: del %LOCALAPPDATA%\socraticode\opencode-local.db)
+  The first DB stores sessions/messages; the second stores the socratic
+  profile (level, weaknesses, strengths, streak). Delete both for a
+  clean slate.
+
 
 FULL DOCUMENTATION
 
@@ -82,9 +165,10 @@ FULL DOCUMENTATION
   CHANGELOG.md        v1.0 feature list
   CONTRIBUTING.md     How to contribute (JSON data edits)
 
+
 SUPPORT
 
-  Issues:  https://github.com/VicBa2000/socraticode/issues
+  Issues:             https://github.com/VicBa2000/socraticode/issues
   Upstream OpenCode:  https://github.com/anomalyco/opencode
 
 ================================================================================
