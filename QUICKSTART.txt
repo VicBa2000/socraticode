@@ -42,6 +42,42 @@ INSTALL (3 steps)
      After that you're at the prompt — type and press Enter.
 
 
+WHAT THE FORK CREATES ON DISK (auto, no manual step)
+
+  Config  (setup wizard writes):
+     Linux / macOS:  ~/.config/socraticode/socraticode.json
+     Windows:        %USERPROFILE%\.config\socraticode\socraticode.json
+
+  Data  (first TUI run creates + auto-migrates):
+     Linux / macOS:  ~/.local/share/socraticode/
+                       ├─ opencode-local.db   (sessions / messages — from OpenCode)
+                       ├─ socraticode.db      (pedagogical profile — added by the fork)
+                       ├─ log/dev.log         (runtime logs)
+                       └─ snapshot/           (session git snapshots)
+     Windows:        %LOCALAPPDATA%\socraticode\   (same layout)
+
+  Nothing else is installed globally and no external services are
+  required beyond your chosen LLM provider (Ollama Local or Cloud).
+  The socratic DB schema auto-applies on startup — no manual migration.
+
+
+POWER-USER ENV VARS (optional overrides added by the fork)
+
+  SOCRATICODE_FORCE_LITE=1
+     Force the text-tool harness (markdown tool list, strip skills,
+     smaller prompts). Use for tiny local models that claim to support
+     tools but hallucinate names.
+
+  SOCRATICODE_FORCE_STRONG=1
+     Force the full socratic prompt path (HINT_META, complex directives,
+     native tool_calls). Use to override auto-detection when you know
+     your model is stronger than the classifier thinks.
+
+  Set inline before the command, e.g.:
+     Linux / macOS:  SOCRATICODE_FORCE_LITE=1 bun run --cwd packages/opencode dev
+     Windows PS:     $env:SOCRATICODE_FORCE_LITE="1"; bun run --cwd packages\opencode dev
+
+
 MAKE `socraticode` A GLOBAL COMMAND
 
   Pick ONE of the two options below so you can run `socraticode`
