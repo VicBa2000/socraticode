@@ -679,12 +679,23 @@ export const RunCommand = cmd({
       return await execute(sdk)
     }
 
-    await bootstrap(process.cwd(), async () => {
+    // Prefer the shell's PWD over process.cwd() so that 'socraticode run ...'
+    // invoked via the installed wrapper (which uses `bun run --cwd <pkg>`) still
+    // operates on the user's actual directory, not the package dir.
+    // Both paths need the directory: bootstrap (Instance context / tools like
+    // bash pwd) AND the SDK client (sends x-opencode-directory header, which
+    // the server router middleware uses when there's no query override).
+    const runDir = directory ?? process.env["PWD"] ?? process.cwd()
+    await bootstrap(runDir, async () => {
       const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
         const request = new Request(input, init)
         return Server.Default().app.fetch(request)
       }) as typeof globalThis.fetch
-      const sdk = createOpencodeClient({ baseUrl: "http://opencode.internal", fetch: fetchFn })
+      const sdk = createOpencodeClient({
+        baseUrl: "http://opencode.internal",
+        fetch: fetchFn,
+        directory: runDir,
+      })
       await execute(sdk)
     })
   },
