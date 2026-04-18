@@ -451,6 +451,7 @@ export const Assistant = Base.extend({
   ref: "AssistantMessage",
 })
 export type Assistant = z.infer<typeof Assistant>
+export const AssistantError = Assistant.shape.error
 
 export const Info = z.discriminatedUnion("role", [User, Assistant]).meta({
   ref: "Message",
