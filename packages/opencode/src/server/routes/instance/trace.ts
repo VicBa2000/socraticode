@@ -6,7 +6,7 @@ type AppEnv = Parameters<typeof AppRuntime.runPromise>[0] extends Effect.Effect<
 
 // Build the base span attributes for an HTTP handler: method, path, and every
 // matched route param. Names follow OTel attribute-naming guidance:
-// domain-first (`session.id`, `message.id`, …) so they match the existing
+// domain-first (`session.id`, `message.id`, ...) so they match the existing
 // OTel `session.id` semantic convention and the bare `message.id` we
 // already emit from Tool.execute. Non-standard route params fall back to
 // `opencode.<name>` since those are internal implementation details
@@ -28,7 +28,6 @@ export function paramToAttributeKey(key: string): string {
   if (m) return `${m[1].toLowerCase()}.id`
   return `opencode.${key}`
 }
-
 export function requestAttributes(c: RequestLike): Record<string, string> {
   const attributes: Record<string, string> = {
     "http.method": c.req.method,
