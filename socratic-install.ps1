@@ -2,13 +2,19 @@
 #
 # socratic-install.ps1
 #
-# Installs the fork-specific additions only:
-#   1. Runs the SocraticCode setup wizard (Ollama Local / Cloud config).
-#   2. Adds a `socraticode` PowerShell function so you can run it from any directory.
+# End-to-end installer for this fork.
 #
-# This script does NOT touch anything OpenCode does on its own
-# (dependency install, DB migrations, base config, etc.).
-# Prerequisite: run `bun install` once in this directory before invoking this script.
+# Fork-specific steps (always the focus):
+#   1. Run the SocraticCode setup wizard (Ollama Local / Cloud config).
+#   2. Add a `socraticode` PowerShell function so you can run it from any directory.
+#
+# OpenCode base step (only if missing, prompts before acting):
+#   0. Run `bun install` at the repo root. This is OpenCode's standard
+#      dependency install — the script offers to run it only if it
+#      detects it hasn't been done yet.
+#
+# What this script never does: modify OpenCode's CLI, DB schema, agent
+# core, or run its upstream release installer.
 
 $ErrorActionPreference = "Stop"
 
@@ -25,22 +31,57 @@ if (-not (Test-Path $PkgDir)) {
   Fail "Could not find packages\opencode. Run this script from the repo root."
 }
 
-# ── Prerequisite checks (do NOT auto-run OpenCode base steps) ────
+# ── Prerequisite: Bun ────────────────────────────────────────
 if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
-  Fail "Bun is not installed. Install from https://bun.sh"
+  Fail "Bun is not installed. Install it from https://bun.sh and re-run this script."
 }
+$bunVersion = (bun --version).Trim()
+Ok "Bun detected ($bunVersion)"
+
+# ── Step 0/2: OpenCode base — `bun install` (only if missing) ──
 if (-not (Test-Path (Join-Path $RepoDir "node_modules"))) {
-  Fail "Dependencies not installed. Run 'bun install' at the repo root first, then re-run this script."
+  Warn "Dependencies not installed yet (no node_modules\ directory)."
+  Write-Host "    This is OpenCode's standard step (just 'bun install' at the repo root)."
+  $yn = Read-Host "==> Run 'bun install' now? [Y/n]"
+  if ($yn -eq "") { $yn = "Y" }
+  if ($yn -match "^[Yy]") {
+    Info "Running 'bun install'..."
+    Push-Location $RepoDir
+    try { bun install } finally { Pop-Location }
+    if ($LASTEXITCODE -ne 0) { Fail "bun install exited with code $LASTEXITCODE" }
+    Ok "Dependencies installed"
+  } else {
+    Fail "Aborted. Run 'bun install' yourself, then re-run this script."
+  }
+} else {
+  Ok "Dependencies already installed (node_modules\ present)"
 }
-Ok "Bun + node_modules present"
 
 # ── Step 1/2: SocraticCode setup wizard (fork-added command) ──
-Info "Launching the SocraticCode setup wizard (Ollama provider config)..."
-Write-Host ""
-bun run --cwd $PkgDir dev setup
-if ($LASTEXITCODE -ne 0) { Fail "Setup wizard exited with code $LASTEXITCODE" }
-Write-Host ""
-Ok "Setup wizard finished"
+$CfgFile = Join-Path $env:USERPROFILE ".config\socraticode\socraticode.json"
+if (Test-Path $CfgFile) {
+  Warn "A SocraticCode config already exists at:"
+  Write-Host "    $CfgFile"
+  $yn = Read-Host "==> Re-run the setup wizard (overwrites provider + default model)? [y/N]"
+  if ($yn -eq "") { $yn = "N" }
+  if ($yn -match "^[Yy]") {
+    Info "Launching the SocraticCode setup wizard..."
+    Write-Host ""
+    bun run --cwd $PkgDir dev setup
+    if ($LASTEXITCODE -ne 0) { Fail "Setup wizard exited with code $LASTEXITCODE" }
+    Write-Host ""
+    Ok "Setup wizard finished"
+  } else {
+    Info "Keeping existing config. (Run 'socraticode setup' later to change it.)"
+  }
+} else {
+  Info "Launching the SocraticCode setup wizard (Ollama provider config)..."
+  Write-Host ""
+  bun run --cwd $PkgDir dev setup
+  if ($LASTEXITCODE -ne 0) { Fail "Setup wizard exited with code $LASTEXITCODE" }
+  Write-Host ""
+  Ok "Setup wizard finished"
+}
 
 # ── Step 2/2: global `socraticode` function ──────────────────
 Write-Host ""

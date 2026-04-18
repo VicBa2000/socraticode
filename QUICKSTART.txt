@@ -29,17 +29,31 @@ PART A — OPENCODE BASE (standard, do this once)
 
     git clone https://github.com/VicBa2000/socraticode.git
     cd socraticode
+
+  Dependency install (`bun install`) is OpenCode's standard step. You
+  can either run it yourself now:
+
     bun install
 
-  That's it for the base. Go to PART B.
+  ...or skip it and let the fork installer (PART B) run it for you — it
+  detects a missing node_modules/ and asks whether to install.
 
 
-PART B — FORK-SPECIFIC INSTALL (one script)
+PART B — FORK INSTALLER (one script)
 
-  A single script installs everything the fork adds on top of OpenCode:
-    - Runs the SocraticCode setup wizard (interactive: Ollama Local / Cloud).
-    - Adds the `socraticode` global command (shell alias).
-  It does NOT touch any OpenCode internals.
+  A single script installs everything needed:
+    - (Step 0) Runs `bun install` IF AND ONLY IF it wasn't done yet,
+      and only after asking. OpenCode base dependency, not ours, but
+      we offer to run it so newcomers don't have to juggle commands.
+    - (Step 1) Runs the SocraticCode setup wizard (fork-added).
+    - (Step 2) Adds the `socraticode` global command (fork-added).
+  It does NOT touch OpenCode's CLI, DB schema, agent core, or run its
+  upstream release installer.
+
+  The script detects existing state and prompts before acting:
+    - node_modules missing?       asks before running bun install
+    - config file already exists? asks before re-running the wizard
+    - alias already in your rc?   replaces it with the current repo path
 
   Linux / macOS (bash or zsh):
        ./socratic-install.sh

@@ -2,13 +2,19 @@
 #
 # socratic-install.sh
 #
-# Installs the fork-specific additions only:
-#   1. Runs the SocraticCode setup wizard (Ollama Local / Cloud config).
-#   2. Adds a `socraticode` shell alias so you can run it from any directory.
+# End-to-end installer for this fork.
 #
-# This script does NOT touch anything OpenCode does on its own
-# (dependency install, DB migrations, base config, etc.).
-# Prerequisite: run `bun install` once in this directory before invoking this script.
+# Fork-specific steps (always the focus):
+#   1. Run the SocraticCode setup wizard (Ollama Local / Cloud config).
+#   2. Add a `socraticode` shell alias so you can run it from any directory.
+#
+# OpenCode base step (only if missing, prompts before acting):
+#   0. Run `bun install` at the repo root. This is OpenCode's standard
+#      dependency install — the script offers to run it only if it
+#      detects it hasn't been done yet.
+#
+# What this script never does: modify OpenCode's CLI, DB schema, agent
+# core, or run its upstream release installer.
 #
 # Supports: Linux, macOS, Windows (Git Bash / MSYS / Cygwin).
 # For native Windows PowerShell, use socratic-install.ps1 instead.
@@ -40,17 +46,50 @@ PKG_DIR="$REPO_DIR/packages/opencode"
 
 [ -d "$PKG_DIR" ] || fail "Could not find packages/opencode. Run this script from the repo root."
 
-# ── Prerequisite checks (do NOT auto-run OpenCode base steps) ────
-command -v bun >/dev/null 2>&1 || fail "Bun is not installed. Install from https://bun.sh"
-[ -d "$REPO_DIR/node_modules" ] || fail "Dependencies not installed. Run 'bun install' at the repo root first, then re-run this script."
-ok "Bun + node_modules present"
+# ── Prerequisite: Bun ────────────────────────────────────────
+command -v bun >/dev/null 2>&1 || fail "Bun is not installed. Install it from https://bun.sh and re-run this script."
+ok "Bun detected ($(bun --version))"
+
+# ── Step 0/2: OpenCode base — `bun install` (only if missing) ──
+if [ ! -d "$REPO_DIR/node_modules" ]; then
+  warn "Dependencies not installed yet (no node_modules/ directory)."
+  echo "    This is OpenCode's standard step (just 'bun install' at the repo root)."
+  read -r -p "$(echo -e "${BLUE}==>${NC} Run 'bun install' now? [Y/n] ")" yn
+  yn="${yn:-Y}"
+  if [[ "$yn" =~ ^[Yy] ]]; then
+    info "Running 'bun install'..."
+    (cd "$REPO_DIR" && bun install)
+    ok "Dependencies installed"
+  else
+    fail "Aborted. Run 'bun install' yourself, then re-run this script."
+  fi
+else
+  ok "Dependencies already installed (node_modules/ present)"
+fi
 
 # ── Step 1/2: SocraticCode setup wizard (fork-added command) ──
-info "Launching the SocraticCode setup wizard (Ollama provider config)..."
-echo
-bun run --cwd "$PKG_DIR" dev setup
-echo
-ok "Setup wizard finished"
+CFG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/socraticode/socraticode.json"
+if [ -f "$CFG_FILE" ]; then
+  warn "A SocraticCode config already exists at:"
+  echo "    $CFG_FILE"
+  read -r -p "$(echo -e "${BLUE}==>${NC} Re-run the setup wizard (overwrites provider + default model)? [y/N] ")" yn
+  yn="${yn:-N}"
+  if [[ "$yn" =~ ^[Yy] ]]; then
+    info "Launching the SocraticCode setup wizard..."
+    echo
+    bun run --cwd "$PKG_DIR" dev setup
+    echo
+    ok "Setup wizard finished"
+  else
+    info "Keeping existing config. (Run 'socraticode setup' later to change it.)"
+  fi
+else
+  info "Launching the SocraticCode setup wizard (Ollama provider config)..."
+  echo
+  bun run --cwd "$PKG_DIR" dev setup
+  echo
+  ok "Setup wizard finished"
+fi
 
 # ── Step 2/2: global `socraticode` alias ─────────────────────
 echo
