@@ -138,9 +138,15 @@ FEYNMAN MODE (role reversal)
   6. MEMORY: WHAT SOCRATICODE TRACKS
 ================================================================================
 
-Everything is stored in SQLite at
-  ~/.local/share/socraticode/opencode-local.db
-  (Windows: %LOCALAPPDATA%\socraticode\)
+Everything is stored in SQLite at one of these files inside
+  ~/.local/share/socraticode/   (Windows: %LOCALAPPDATA%\socraticode\)
+
+  opencode-local.db   -> when launched via the dev script / shell alias
+                         installed by socratic-install.sh / .ps1.
+  socraticode.db      -> when launched from the standalone compiled
+                         binary (release channel).
+
+Only one of the two is active per run. Both contain the same tables.
 
   PEDAGOGICAL PROFILE
     - Global level + per-domain level (JS, SQL, Docker, etc.)
@@ -329,23 +335,80 @@ Useful for:
   15. CONFIGURATION AND FILES
 ================================================================================
 
-  ~/.config/socraticode/socraticode.json
-    Providers (Ollama Local, Ollama Cloud, Claude, etc.) and default model.
-    Edit with `socraticode setup` or by hand.
+INSTALLING THE FORK ADDITIONS
 
-  ~/.local/share/socraticode/opencode-local.db
-    SQLite with all tracking. Inspect with sqlite3.
-    9 socratic tables: profile, domain_level, interest, error_map,
-    strength, session, reasoning_step, journal, antipattern.
+  After `git clone` + `bun install` (standard OpenCode base), run one
+  script that installs only what the fork adds on top:
+
+    Linux / macOS (and Windows Git Bash):
+      ./socratic-install.sh
+
+    Windows PowerShell:
+      .\socratic-install.ps1
+
+  What it does:
+    1. Runs the SocraticCode setup wizard (Ollama Local / Cloud config).
+    2. Adds a `socraticode` global shell alias / PowerShell function.
+
+  What it does NOT touch: OpenCode's own install flow, `bun install`,
+  DB migrations, base CLI, agent core. Those are upstream concerns.
+
+  See QUICKSTART.txt for the step-by-step walkthrough.
+
+
+FILES CREATED BY THE FORK
+
+  ~/.config/socraticode/socraticode.json
+  (Windows: %USERPROFILE%\.config\socraticode\socraticode.json)
+    Providers (Ollama Local, Ollama Cloud, Claude, etc.) and default model.
+    Written by the setup wizard. Edit with `socraticode setup` or by hand.
+
+  ~/.local/share/socraticode/
+  (Windows: %LOCALAPPDATA%\socraticode\)
+    ├─ opencode-local.db   SQLite with all tracking — active when launched
+    │                      via the dev script / shell alias.
+    ├─ socraticode.db      Same schema, active when launched from the
+    │                      standalone compiled binary.
+    ├─ log/dev.log         Runtime logs (INFO/WARN/ERROR, tool events).
+    └─ snapshot/           Per-session git snapshots (rollback / diff).
+
+    Socratic tables in either DB: profile, domain_level, interest,
+    error_map, strength, session, reasoning_step, journal, antipattern.
 
   ~/.cache/socraticode/
     Migration and artifact caches. Safe to delete.
 
-Relevant environment variables:
-  SOCRATICODE_FORCE_LITE=1     Force lite mode (short prompts, no HINT_META)
-  SOCRATICODE_FORCE_STRONG=1   Force strong mode (full prompts)
-  SOCRATICODE_DB=:memory:      In-memory DB (for testing)
-  SOCRATICODE_DB=/path.db      Custom DB
+
+RELEVANT ENVIRONMENT VARIABLES
+
+  SOCRATICODE_FORCE_LITE=1     Force lite mode (short prompts, no HINT_META).
+                               Use for tiny local models that claim tool
+                               support but hallucinate names.
+  SOCRATICODE_FORCE_STRONG=1   Force strong mode (full socratic prompts).
+                               Use to override auto-detection when you know
+                               your model is stronger than the classifier thinks.
+  SOCRATICODE_DB=:memory:      In-memory DB (for testing).
+  SOCRATICODE_DB=/path.db      Custom DB path.
+
+
+UNINSTALLING THE FORK ADDITIONS
+
+  1. Remove the global alias:
+       Linux / macOS: delete the line starting with `alias socraticode=`
+       from ~/.bashrc or ~/.zshrc.
+       Windows PowerShell: open $PROFILE and delete the block between the
+       `# >>> socraticode (fork install) >>>` and `# <<<` markers.
+
+  2. Delete the fork-specific files:
+       rm ~/.config/socraticode/socraticode.json
+       rm ~/.local/share/socraticode/opencode-local.db
+       rm ~/.local/share/socraticode/socraticode.db
+     (Windows: Remove-Item on the equivalent paths under
+      $env:USERPROFILE\.config\socraticode\ and $env:LOCALAPPDATA\socraticode\)
+
+  3. Delete the cloned repo.
+
+  OpenCode itself is untouched by any of this.
 
 ================================================================================
   16. TROUBLESHOOTING
@@ -366,13 +429,18 @@ Relevant environment variables:
   or edit ~/.config/socraticode/socraticode.json.
 
 "I want to reset my profile and start over"
-  Delete the DB:
+  Delete both DBs (only one is active at a time, but deleting both is
+  harmless and covers dev-script and standalone-binary setups):
     rm ~/.local/share/socraticode/opencode-local.db
-  (Windows: del %LOCALAPPDATA%\socraticode\opencode-local.db)
+    rm ~/.local/share/socraticode/socraticode.db
+  Windows PowerShell:
+    Remove-Item "$env:LOCALAPPDATA\socraticode\opencode-local.db"
+    Remove-Item "$env:LOCALAPPDATA\socraticode\socraticode.db"
   Re-opening triggers initial calibration.
 
 "I want to see exactly what's being saved"
   sqlite3 ~/.local/share/socraticode/opencode-local.db
+  # (use socraticode.db instead if running the standalone binary)
   .tables
   SELECT * FROM socratic_profile;
 
@@ -412,13 +480,15 @@ Relevant environment variables:
   18. RESOURCES
 ================================================================================
 
-  README.md           Overview and diff table with OpenCode
-  CHANGELOG.md        Full v1.0 changelog
-  CONTRIBUTING.md     How to contribute (JSON data or code)
-  FAQ.md              Frequently asked questions
-  QUICKSTART.txt      Quick install steps
+  README.md                Overview and diff table with OpenCode
+  CHANGELOG.md             Full v1.0 changelog
+  CONTRIBUTING.md          How to contribute (JSON data or code)
+  FAQ.md                   Frequently asked questions
+  QUICKSTART.txt           Quick install steps (PART A + PART B)
+  socratic-install.sh      Fork-only installer for Linux / macOS / Git Bash
+  socratic-install.ps1     Fork-only installer for Windows PowerShell
 
-  OpenCode:           https://github.com/anomalyco/opencode
+  OpenCode:                https://github.com/anomalyco/opencode
 
 ================================================================================
   END OF MANUAL
