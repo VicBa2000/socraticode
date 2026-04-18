@@ -116,33 +116,76 @@ export namespace Budget {
    *
    * Stable: preserves the relative order of what remains.
    */
+  /**
+   * Scan messages for orphan `tool` rows (a tool message whose preceding
+   * non-tool message is not an assistant) and drop them. This is always
+   * safe: a tool message without a matching assistant tool_call is
+   * universally rejected by providers ("Unexpected role 'tool' after
+   * role 'user'" / "... after role 'system'"). We sanitize here to
+   * defend against upstream compaction bugs that leave the conversation
+   * in that state even when no budget trim is needed.
+   */
+  export function sanitizeOrphanTools<T extends TrimmableMessage>(messages: T[]): { messages: T[]; dropped: number } {
+    const drop = new Set<number>()
+    let lastNonToolRole: string | null = null
+    for (let i = 0; i < messages.length; i++) {
+      const role = messages[i]!.role
+      if (role === "tool") {
+        if (lastNonToolRole !== "assistant") drop.add(i)
+      } else {
+        lastNonToolRole = role
+      }
+    }
+    if (drop.size === 0) return { messages: [...messages], dropped: 0 }
+    return { messages: messages.filter((_, i) => !drop.has(i)), dropped: drop.size }
+  }
+
   export function trimHistory<T extends TrimmableMessage>(
     messages: T[],
     budgetTokens: number,
   ): TrimResult<T> {
     if (budgetTokens < 0) budgetTokens = 0
 
+    // Always sanitize orphan tools first — they're invalid regardless
+    // of whether we need to trim for budget.
+    const sanitized = sanitizeOrphanTools(messages)
+    messages = sanitized.messages as T[]
+
     const total = estimateMessagesTokens(messages)
     if (total <= budgetTokens) {
-      return { messages: [...messages], dropped: 0, finalTokens: total, trimmed: false }
+      return {
+        messages: [...messages],
+        dropped: sanitized.dropped,
+        finalTokens: total,
+        trimmed: sanitized.dropped > 0,
+      }
     }
 
     // Group contiguous messages into atomic blocks:
     //   - assistant + following tool messages -> single block
     //   - any other role -> single-message block
+    // A `tool` message is attached to the previous block ONLY IF that block
+    // already contains an assistant. Otherwise the tool is orphan from the
+    // start (upstream bug) and gets its own block, which naturally becomes
+    // a drop candidate.
     // If a block contains any pinned message, the whole block is pinned.
-    type Block = { indices: number[]; pinned: boolean; tokens: number }
+    type Block = { indices: number[]; pinned: boolean; tokens: number; hasAssistant: boolean }
     const blocks: Block[] = []
     for (let i = 0; i < messages.length; i++) {
       const m = messages[i]!
       const cost = estimateTokens(m.content) + 4
       const last = blocks[blocks.length - 1]
-      if (m.role === "tool" && last) {
+      if (m.role === "tool" && last && last.hasAssistant) {
         last.indices.push(i)
         last.tokens += cost
         if (m.pinned) last.pinned = true
       } else {
-        blocks.push({ indices: [i], pinned: !!m.pinned, tokens: cost })
+        blocks.push({
+          indices: [i],
+          pinned: !!m.pinned,
+          tokens: cost,
+          hasAssistant: m.role === "assistant",
+        })
       }
     }
 

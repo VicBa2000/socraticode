@@ -154,6 +154,38 @@ describe("Budget.trimHistory", () => {
     })
   })
 
+  test("sanitizes orphan tool AFTER user (upstream compaction bug) even when no trim needed", () => {
+    // Regression for the real sequence we saw in the log:
+    //   system, user ("Continue..."), tool, assistant, tool, ...
+    // The first assistant (that issued the tool_call matching the 1st tool)
+    // was lost by OpenCode compaction. Budget sanitize must drop the orphan
+    // tool even when we're well under budget.
+    const messages = [
+      msg("user", "Continue if you have next steps"),
+      msg("tool", "Could not find oldString"),
+      msg("assistant", "a1"),
+      msg("tool", "Offset 40 is out of range"),
+    ]
+    const r = Budget.trimHistory(messages, 100_000) // huge budget, no trim needed
+    expect(r.trimmed).toBe(true) // because sanitize fired
+    expect(r.dropped).toBe(1)
+    expect(r.messages.map((m) => m.role)).toEqual(["user", "assistant", "tool"])
+  })
+
+  test("sanitize standalone — exposes the helper", () => {
+    const messages = [
+      msg("system", "s"),
+      msg("tool", "orphan1"),
+      msg("user", "u"),
+      msg("tool", "orphan2"),
+      msg("assistant", "a"),
+      msg("tool", "valid"),
+    ]
+    const r = Budget.sanitizeOrphanTools(messages)
+    expect(r.dropped).toBe(2)
+    expect(r.messages.map((m) => m.role)).toEqual(["system", "user", "assistant", "tool"])
+  })
+
   test("drops assistant + its tool_results as a single block", () => {
     const messages = [
       msg("user", "u1"),
