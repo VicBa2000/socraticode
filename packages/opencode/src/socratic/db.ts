@@ -1,4 +1,4 @@
-import { eq, and, isNull, or, lte, gte, asc, desc } from "drizzle-orm"
+import { eq, and, isNull, isNotNull, or, lte, gte, asc, desc } from "drizzle-orm"
 import { Database } from "../storage/db"
 import {
   SocraticProfileTable,
@@ -317,6 +317,23 @@ export namespace SocraticDB {
         .from(ReasoningStepTable)
         .where(eq(ReasoningStepTable.session_id, sessionId))
         .orderBy(ReasoningStepTable.turn_index)
+        .all()
+    })
+  }
+
+  /**
+   * Return the most recent evaluated turns (correct IS NOT NULL) across all
+   * sessions, newest first. Used by the upgrade filters to build a window of
+   * evidence independent of session boundaries.
+   */
+  export function getRecentEvaluatedTurns(limit: number) {
+    return Database.use((db) => {
+      return db
+        .select()
+        .from(ReasoningStepTable)
+        .where(isNotNull(ReasoningStepTable.correct))
+        .orderBy(desc(ReasoningStepTable.timestamp))
+        .limit(limit)
         .all()
     })
   }

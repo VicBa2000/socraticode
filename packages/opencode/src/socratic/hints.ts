@@ -48,14 +48,19 @@ export namespace Hints {
 
   /**
    * Get the starting hint level based on user level.
-   * Novices start high (no point in socratic questions about unknown material).
+   *
+   * Smoothing for mid-tier users: pure socratic as a cold start creates
+   * unnecessary friction when the user actually does not know the thing.
+   * Intermediate opens at analogy (still discovery, less gotcha);
+   * advanced opens at orientation (category pointer, not solution).
+   * Expert stays at pure socratic — at that level silence is the default.
    */
   export function getInitialHintLevel(userLevel: LevelsNS.UserLevel): HintLevel {
     switch (userLevel) {
       case 1: return 5  // novato: scaffolding
       case 2: return 4  // basico: explanation + verification
-      case 3: return 0  // intermedio: socratic pure
-      case 4: return 0  // avanzado: socratic pure
+      case 3: return 2  // intermedio: analogy (smoothed from 0)
+      case 4: return 1  // avanzado: orientation (smoothed from 0)
       case 5: return 0  // experto: socratic pure
     }
   }

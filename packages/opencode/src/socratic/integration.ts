@@ -52,6 +52,13 @@ export namespace SocraticIntegration {
     feynman: Feynman.FeynmanState
     lastUserMessage: string
     lastErrorClass: string | null
+    /**
+     * When set, the next buildSystemPrompt injects an anti-adulation
+     * one-shot directive and clears this flag. Triggered when the upgrade
+     * signals fire (regardless of whether the quality filters pass) — this
+     * is the window where model optimism translates into false promotion.
+     */
+    preUpgradeGuardNextTurn: boolean
   }
 
   const sessionStates = new Map<string, SessionState>()
@@ -77,6 +84,7 @@ export namespace SocraticIntegration {
         feynman: Feynman.createIdle(),
         lastUserMessage: "",
         lastErrorClass: null,
+        preUpgradeGuardNextTurn: false,
       }
       sessionStates.set(sessionID, state)
 
@@ -240,6 +248,14 @@ export namespace SocraticIntegration {
       const toolDirective = Interceptor.getSessionDirective(globalLevel, mode)
       if (toolDirective) {
         sections.push(toolDirective)
+      }
+
+      // Pre-upgrade anti-adulation guard (one-shot). Clear the flag after
+      // consuming it so the next turn doesn't re-inject unless a new upgrade
+      // evaluation re-arms it.
+      if (state.preUpgradeGuardNextTurn) {
+        sections.push(AntiAdulation.getPreUpgradeGuardDirective())
+        state.preUpgradeGuardNextTurn = false
       }
 
       // Spaced-repetition review: inject only on the first turn of the session.
@@ -466,6 +482,12 @@ export namespace SocraticIntegration {
     topic: string
     domain: string
     level: string
+    /**
+     * Model's read of whether the user performed above, at, or below their
+     * current level this turn. Optional — omitted or null if the model cannot
+     * judge. Feeds into the upgrade weighted-avg filter.
+     */
+    readiness?: "above" | "at" | "below" | null
   }
 
   const HINT_META_REGEX = /\[HINT_META:\{.*?\}\]\s*$/
@@ -577,6 +599,10 @@ export namespace SocraticIntegration {
 
       // Record turn in tracking
       try {
+        const readiness =
+          meta.readiness === "above" || meta.readiness === "at" || meta.readiness === "below"
+            ? meta.readiness
+            : null
         Tracking.recordTurn({
           sessionId: sessionID,
           turnIndex: state.turnCount,
@@ -588,6 +614,7 @@ export namespace SocraticIntegration {
           userExcerpt: null, // Filled by caller if available
           agentExcerpt: null, // Filled by caller if available
           accompaniedImpl: state.accompanimentState.phase !== "idle",
+          readiness,
         })
       } catch {
         // Non-critical
@@ -616,6 +643,25 @@ export namespace SocraticIntegration {
               adjustment.newLevel,
               adjustment.reason,
             )
+          }
+          // Arm the one-shot anti-adulation guard whenever an upgrade is
+          // being considered. Three triggers, ORed:
+          //  (a) signals accumulated enough correct answers to be near the
+          //      threshold — even if technicalTermsUsed is false and the
+          //      simple path short-circuits before the filters fire.
+          //  (b) the filter actually blocked an upgrade (we're close).
+          //  (c) the upgrade actually committed — next turn gets a stricter
+          //      re-grade right after level change.
+          // Downgrades do not arm — we only guard against falsely lenient
+          // promotions.
+          const signalsNearThreshold =
+            signals.correctAnswers >= 3 &&
+            globalLevel < 5 &&
+            !signals.copyPasteDetected
+          const blockedUpgrade = adjustment.reason?.includes("upgrade blocked") ?? false
+          const successfulUpgrade = adjustment.changed && adjustment.newLevel > globalLevel
+          if (signalsNearThreshold || blockedUpgrade || successfulUpgrade) {
+            state.preUpgradeGuardNextTurn = true
           }
         }
 

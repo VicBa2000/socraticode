@@ -163,6 +163,10 @@ export const ReasoningStepTable = sqliteTable(
     user_excerpt: text(),
     agent_excerpt: text(),
     domain: text(),
+    // "above" | "at" | "below" | null — model's read of whether the user
+    // answered above, at, or below their current level. Used by the upgrade
+    // weighted-avg filter (readiness='above' boosts weight, 'below' penalizes).
+    readiness: text(),
     timestamp: integer()
       .notNull()
       .$default(() => Date.now()),

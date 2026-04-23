@@ -34,8 +34,8 @@ describe("Levels.getProfile", () => {
   test("each level has correct initialHintLevel", () => {
     expect(Levels.getProfile(1).initialHintLevel).toBe(5)
     expect(Levels.getProfile(2).initialHintLevel).toBe(4)
-    expect(Levels.getProfile(3).initialHintLevel).toBe(0)
-    expect(Levels.getProfile(4).initialHintLevel).toBe(0)
+    expect(Levels.getProfile(3).initialHintLevel).toBe(2) // smoothed: analogy
+    expect(Levels.getProfile(4).initialHintLevel).toBe(1) // smoothed: orientation
     expect(Levels.getProfile(5).initialHintLevel).toBe(0)
   })
 
@@ -189,5 +189,83 @@ describe("Levels.updateConfidence", () => {
   test("never exceeds 1.0", () => {
     const c = Levels.updateConfidence(0.99, 1000)
     expect(c).toBeLessThanOrEqual(1.0)
+  })
+})
+
+describe("Levels.evaluateUpgradeFilters", () => {
+  function mkTurns(n: number, overrides: Partial<Levels.TurnForFilter> = {}): Levels.TurnForFilter[] {
+    return Array.from({ length: n }, (_, i) => ({
+      hintLevel: i % 3, // 0,1,2,0,1,2,... all low-hint
+      correct: true,
+      topic: `topic_${i % 7}`,
+      readiness: null,
+      ...overrides,
+    }))
+  }
+
+  test("blocks upgrade when not enough correct in window", () => {
+    const r = Levels.evaluateUpgradeFilters(2, mkTurns(5)) // L2 needs 7 correct in 9
+    expect(r.passed).toBe(false)
+    expect(r.reason).toMatch(/only 5\/7/)
+  })
+
+  test("passes when healthy evidence: diverse, low-hint, enough correct", () => {
+    const r = Levels.evaluateUpgradeFilters(2, mkTurns(9))
+    expect(r.passed).toBe(true)
+    expect(r.weightedAvg).toBeGreaterThanOrEqual(0.5)
+  })
+
+  test("blocks upgrade when all correct under hint=5 (scaffold obedience)", () => {
+    const r = Levels.evaluateUpgradeFilters(2, mkTurns(9, { hintLevel: 5 }))
+    expect(r.passed).toBe(false)
+    expect(r.reason).toMatch(/weighted avg/)
+  })
+
+  test("blocks upgrade when all correct on the same topic", () => {
+    const r = Levels.evaluateUpgradeFilters(2, mkTurns(9, { topic: "one-thing" }))
+    expect(r.passed).toBe(false)
+    expect(r.reason).toMatch(/topic diversity/)
+  })
+
+  test("blocks upgrade when low-hint count is too low (all hint=3)", () => {
+    // hint=3 is above LOW_HINT_THRESHOLD (2) → no low-hint evidence
+    const turns = mkTurns(9, { hintLevel: 3 })
+    const r = Levels.evaluateUpgradeFilters(2, turns)
+    expect(r.passed).toBe(false)
+    // Either weighted avg (0.4 for all hint=3) or low-hint count triggers first.
+    // hint=3 → weight=0.4 → avg=0.4 < 0.5 → weighted avg fires first
+    expect(r.reason).toMatch(/weighted avg|low-hint count/)
+  })
+
+  test("readiness='above' adds +0.25 to the per-turn weight (capped at 1.0)", () => {
+    // All correct at hint=3 (base weight=0.4) but readiness='above' → 0.65.
+    // Topic diversity/low-hint filters are separate; this asserts the weight math.
+    const turns = mkTurns(9, { hintLevel: 3, readiness: "above" })
+    const r = Levels.evaluateUpgradeFilters(2, turns)
+    expect(r.weightedAvg).toBeCloseTo(0.65, 2)
+  })
+
+  test("readiness='below' subtracts 0.25 from the per-turn weight", () => {
+    // hint=1 (base weight=0.8) but readiness='below' (-0.25) → 0.55
+    const turns = mkTurns(9, { hintLevel: 1, readiness: "below" })
+    const r = Levels.evaluateUpgradeFilters(2, turns)
+    expect(r.weightedAvg).toBeCloseTo(0.55, 2)
+  })
+
+  test("incorrect turns in window do not count toward correct", () => {
+    // 9 turns but 4 incorrect → only 5 correct, below L2's 7 required
+    const mixed: Levels.TurnForFilter[] = [
+      ...mkTurns(5),
+      ...mkTurns(4, { correct: false }),
+    ]
+    const r = Levels.evaluateUpgradeFilters(2, mixed)
+    expect(r.passed).toBe(false)
+    expect(r.correctInWindow).toBe(5)
+  })
+
+  test("window size varies by current level (L1 needs 10/12)", () => {
+    const r = Levels.evaluateUpgradeFilters(1, mkTurns(9))
+    expect(r.passed).toBe(false)
+    expect(r.reason).toMatch(/only 9\/10/)
   })
 })

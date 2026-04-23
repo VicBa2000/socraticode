@@ -48,7 +48,7 @@ export namespace Levels {
       label: "Intermediate",
       role: "pair programmer",
       description: "Ask before writing. Gapped code. Collaborative.",
-      initialHintLevel: 0,
+      initialHintLevel: 2,
       accompanimentRatio: 0.5,
     },
     4: {
@@ -57,7 +57,7 @@ export namespace Levels {
       label: "Advanced",
       role: "code reviewer",
       description: "Does not explain basics. Challenges architectural decisions. Challenge mode.",
-      initialHintLevel: 0,
+      initialHintLevel: 1,
       accompanimentRatio: 0.1,
     },
     5: {
@@ -152,6 +152,145 @@ export namespace Levels {
     }
 
     return { newLevel: level, changed: false, reason: null }
+  }
+
+  // ── Upgrade Quality Filters ──────────────────────────────
+  //
+  // Passing `evaluateAdjustment` is a NECESSARY condition for upgrade, not a
+  // sufficient one. On top of the simple signal heuristic we require evidence
+  // from the last N evaluated turns across sessions:
+  //   (A) weighted avg >= 0.5 — "10 correct all under hint=5" is obedience.
+  //   (B) topic diversity — can't graduate by nailing the same thing repeatedly.
+  //   (C) depth diversity floor — at least half the correct under low hint.
+  //
+  // Downgrade skips these filters (being stuck above level is worse than a
+  // false downgrade; the user can always /level back up).
+
+  export interface UpgradeWindow {
+    window: number
+    correctRequired: number
+  }
+
+  export const CALIBRATION_UP_BY_LEVEL: Record<UserLevel, UpgradeWindow> = {
+    1: { window: 12, correctRequired: 10 },
+    2: { window: 9, correctRequired: 7 },
+    3: { window: 7, correctRequired: 5 },
+    4: { window: 7, correctRequired: 5 },
+    5: { window: 7, correctRequired: 5 }, // unused (L5 has no upgrade) — kept for completeness
+  }
+
+  export const MIN_WEIGHTED_AVG_FOR_UP = 0.5
+  export const LOW_HINT_THRESHOLD = 2
+
+  export type Readiness = "above" | "at" | "below" | null
+
+  export interface TurnForFilter {
+    hintLevel: number
+    correct: boolean | null
+    topic: string | null
+    readiness?: Readiness
+  }
+
+  export interface UpgradeFilterResult {
+    passed: boolean
+    reason: string
+    weightedAvg: number
+    topicDiversity: number
+    lowHintCount: number
+    correctInWindow: number
+    windowSize: number
+    correctRequired: number
+  }
+
+  /**
+   * Apply the three upgrade quality filters over the most recent `window` turns.
+   *
+   * Callers pass turns newest-first (or any order — we only count, don't index).
+   * Turns with correct === null are ignored (not an evaluated signal).
+   *
+   * The filters check in order: enough correct → weighted avg → topic diversity
+   * → depth diversity. First failure short-circuits with a reason string.
+   */
+  export function evaluateUpgradeFilters(
+    currentLevel: UserLevel,
+    recentTurns: TurnForFilter[],
+  ): UpgradeFilterResult {
+    const cfg = CALIBRATION_UP_BY_LEVEL[currentLevel]
+    // Keep only evaluated turns, then take the latest `window` of them.
+    const evaluated = recentTurns.filter((t) => t.correct !== null).slice(0, cfg.window)
+    const correctTurns = evaluated.filter((t) => t.correct === true)
+    const correctInWindow = correctTurns.length
+
+    const base = {
+      weightedAvg: 0,
+      topicDiversity: 0,
+      lowHintCount: 0,
+      correctInWindow,
+      windowSize: cfg.window,
+      correctRequired: cfg.correctRequired,
+    }
+
+    if (correctInWindow < cfg.correctRequired) {
+      return {
+        ...base,
+        passed: false,
+        reason: `only ${correctInWindow}/${cfg.correctRequired} correct in last ${cfg.window} turns`,
+      }
+    }
+
+    // Filter A: weighted avg of hint-adjusted correctness >= 0.5
+    let weightSum = 0
+    for (const t of correctTurns) {
+      const h = Math.max(0, Math.min(5, t.hintLevel))
+      const baseWeight = (5 - h) / 5
+      const adj =
+        t.readiness === "above" ? 0.25 : t.readiness === "below" ? -0.25 : 0
+      const w = Math.max(0, Math.min(1, baseWeight + adj))
+      weightSum += w
+    }
+    const weightedAvg = weightSum / correctTurns.length
+
+    // Filter B: topic diversity >= ceil(needed/2)
+    const minDiversity = Math.ceil(cfg.correctRequired / 2)
+    const uniqueTopics = new Set(
+      correctTurns.map((t) => t.topic).filter((x): x is string => !!x && x.length > 0),
+    )
+    const topicDiversity = uniqueTopics.size
+
+    // Filter C: depth diversity floor — at least half of the correct under low hint
+    const lowHintCount = correctTurns.filter((t) => t.hintLevel <= LOW_HINT_THRESHOLD).length
+
+    const enriched = { ...base, weightedAvg, topicDiversity, lowHintCount }
+
+    if (weightedAvg < MIN_WEIGHTED_AVG_FOR_UP) {
+      return {
+        ...enriched,
+        passed: false,
+        reason: `weighted avg ${weightedAvg.toFixed(2)} < ${MIN_WEIGHTED_AVG_FOR_UP} (scaffold obedience, not mastery)`,
+      }
+    }
+
+    if (topicDiversity < minDiversity) {
+      return {
+        ...enriched,
+        passed: false,
+        reason: `topic diversity ${topicDiversity} < ${minDiversity} (repeated same topic, not general mastery)`,
+      }
+    }
+
+    if (lowHintCount < minDiversity) {
+      return {
+        ...enriched,
+        passed: false,
+        reason: `low-hint count ${lowHintCount} < ${minDiversity} (no evidence of mastery under light scaffolding)`,
+      }
+    }
+
+    return {
+      ...enriched,
+      passed: true,
+      reason: `weighted=${weightedAvg.toFixed(2)}, topics=${topicDiversity}, lowHint=${lowHintCount}`,
+    }
   }
 
   // ── Domain-Level Confidence ──────────────────────────────

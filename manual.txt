@@ -1,5 +1,5 @@
 ================================================================================
-  SOCRATICODE USER MANUAL - v1.0
+  SOCRATICODE USER MANUAL - v1.1
 ================================================================================
 
 SocraticCode is a fork of OpenCode that turns the coding agent into a
@@ -37,6 +37,16 @@ automatically based on how you answer. You can force it with /level.
     - Real verification question after each block
     - Hints start at level 5 (full scaffolding)
     - Accompaniment: 100%
+    - HARD LIMITS (enforced via system prompt):
+        * MAX 30 lines of code per response
+        * MAX 1 file touched per turn
+        * NO Write/Edit/MultiEdit until you explicitly approve the plan
+          IN THE CURRENT TURN (past approvals do not carry over)
+        * Before any code: (1) restate your request, (2) plan 3-6 bullets
+          with file + line count, (3) teach the prerequisite concept with
+          an analogy, (4) ask ONE comprehension question, then end turn.
+        * Override ("just write it" / "I already know this"): acknowledges
+          once, proceeds that turn only, suggests /level 3.
 
   LEVEL 2 - BASIC (role: guide)
     - Assumes fundamentals, teaches context
@@ -47,27 +57,60 @@ automatically based on how you answer. You can force it with /level.
   LEVEL 3 - INTERMEDIATE (role: pair programmer)
     - Asks your approach before writing
     - Can show code with blanks (___) for you to complete
-    - Hints start at level 0 (pure socratic)
+    - Hints start at level 2 (analogy) — smoothed from 0 so a cold
+      "I don't know" does not get silence as a first response
     - Accompaniment: 50%
 
   LEVEL 4 - ADVANCED (role: code reviewer)
     - Does not explain basics, assumes competence
     - Challenges architectural decisions
     - Flags edge cases, security, scalability
+    - Hints start at level 1 (orientation) — points to the category
+      of the problem without revealing the solution
     - Accompaniment: 10%
 
   LEVEL 5 - EXPERT (role: silent colleague)
     - Works like a normal assistant
     - Only intervenes on vulnerabilities or serious anti-patterns
+    - Hints start at level 0 (pure socratic — silence is the default)
     - Accompaniment: 0%
 
 How the level changes automatically:
-  - 3+ incorrect answers in a row: LOWER one level
-  - 2+ "I don't know" signals: LOWER one level
-  - You ask to slow down: LOWER one level
-  - 3+ correct + you use technical vocabulary: RAISE one level
-  - 3+ correct + you propose a solution without help: RAISE one level
-  - If you paste code (copy-paste detected): BLOCKS upgrades
+
+  DOWNGRADES (fast, no extra gate — stuck above level is worse than
+  a false demotion; you can always /level back up):
+    - 3+ incorrect answers in a row: LOWER one level
+    - 2+ "I don't know" signals: LOWER one level
+    - You ask to slow down: LOWER one level
+
+  UPGRADES (gated by quality filters — simple signal is necessary
+  but not sufficient):
+
+    Step 1 - signal: 3+ correct AND (technical vocabulary OR proposed
+    solution without help) AND no copy-paste flagged.
+
+    Step 2 - quality filters over the recent window (turns where you
+    answered correct/incorrect; pulled across sessions, not just the
+    current one):
+
+      * Enough correct in window by level:
+          L1 needs 10/12, L2 7/9, L3/L4 5/7.
+      * Weighted average >= 0.5, where each correct weighs
+          (5 - hintLevel) / 5 plus readiness adjustment
+          (+0.25 if you answered above level, -0.25 if below, capped).
+          A string of correct answers under hint=5 scores 0.0 — that is
+          scaffold obedience, not mastery, so it does not promote.
+      * Topic diversity: at least ceil(needed/2) distinct topics.
+      * Depth diversity floor: at least ceil(needed/2) of the correct
+          turns were under low hint (<=2). Without this, a model that
+          always hands out heavy hints would always promote the user,
+          regardless of comprehension.
+
+    Only if ALL three filters pass does the upgrade commit. When an
+    upgrade is evaluated (pass or block) the model also gets a one-shot
+    anti-adulation reminder on the next turn — "judge on substance,
+    err toward 'below' when in doubt" — so the turn right after the
+    evaluation is not softened by optimism.
 
 ================================================================================
   3. THE 6 HINT LEVELS (0-5)
@@ -464,12 +507,19 @@ UNINSTALLING THE FORK ADDITIONS
   without touching TypeScript. See CONTRIBUTING.md.
 
 ================================================================================
-  17. KNOWN LIMITATIONS OF v1.0
+  17. KNOWN LIMITATIONS
 ================================================================================
 
   - Lite local models (qwen3:4b, etc.): they emit <tool-call> blocks but
-    real tool execution is NOT wired up yet (v1.1). For now you see the
-    model's intent but have to execute the tool yourself.
+    real tool execution is NOT wired up yet (planned for a future
+    release). For now you see the model's intent but have to execute
+    the tool yourself.
+
+  - Level 1 HARD block is prompt-side only. The Write / Edit / MultiEdit
+    limits are honored because the model follows the imperative block,
+    but there is no tool-layer pre-call hook blocking the call when the
+    user has not approved the plan in the current turn. Tool-level
+    enforcement is planned for a future release.
 
   - Benchmark makes direct provider calls, doesn't go through OpenCode's
     Effect layer. Behavior in session may differ slightly.
@@ -486,7 +536,7 @@ UNINSTALLING THE FORK ADDITIONS
 ================================================================================
 
   README.md                Overview and diff table with OpenCode
-  CHANGELOG.md             Full v1.0 changelog
+  CHANGELOG.md             Full release changelog (v1.0, v1.1, ...)
   CONTRIBUTING.md          How to contribute (JSON data or code)
   FAQ.md                   Frequently asked questions
   QUICKSTART.txt           Quick install steps (PART A + PART B)

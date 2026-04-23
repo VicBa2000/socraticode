@@ -10,9 +10,15 @@ describe("Hints.getInitialHintLevel", () => {
     expect(Hints.getInitialHintLevel(2)).toBe(4)
   })
 
-  test("intermediate/advanced/expert start at pure socratic (0)", () => {
-    expect(Hints.getInitialHintLevel(3)).toBe(0)
-    expect(Hints.getInitialHintLevel(4)).toBe(0)
+  test("intermediate starts at analogy (2) — smoothed to avoid cold socratic friction", () => {
+    expect(Hints.getInitialHintLevel(3)).toBe(2)
+  })
+
+  test("advanced starts at orientation (1) — category pointer, not solution", () => {
+    expect(Hints.getInitialHintLevel(4)).toBe(1)
+  })
+
+  test("expert starts at pure socratic (0)", () => {
     expect(Hints.getInitialHintLevel(5)).toBe(0)
   })
 })
@@ -27,14 +33,14 @@ describe("Hints.clampHint", () => {
 
 describe("Hints.processResponse — escalation", () => {
   test("first failure does not escalate (threshold is 2)", () => {
-    const s0 = Hints.createInitialState(3) // starts at 0
+    const s0 = Hints.createInitialState(5) // starts at 0
     const s1 = Hints.processResponse(s0, false, false)
     expect(s1.currentLevel).toBe(0)
     expect(s1.consecutiveFailures).toBe(1)
   })
 
   test("second consecutive failure escalates by 1 and resets fail counter", () => {
-    let s = Hints.createInitialState(3)
+    let s = Hints.createInitialState(5) // starts at 0
     s = Hints.processResponse(s, false, false)
     s = Hints.processResponse(s, false, false)
     expect(s.currentLevel).toBe(1)
@@ -73,7 +79,7 @@ describe("Hints.processResponse — de-escalation", () => {
   })
 
   test("0 stays at 0 on correct", () => {
-    let s = Hints.createInitialState(3) // starts at 0
+    let s = Hints.createInitialState(5) // starts at 0
     s = Hints.processResponse(s, true, false)
     expect(s.currentLevel).toBe(0)
   })
@@ -81,7 +87,7 @@ describe("Hints.processResponse — de-escalation", () => {
 
 describe("Hints.processResponse — zero-knowledge jumps to 5", () => {
   test("jumps to scaffolding regardless of current level", () => {
-    let s = Hints.createInitialState(3) // starts at 0
+    let s = Hints.createInitialState(5) // starts at 0
     s = Hints.processResponse(s, false, true)
     expect(s.currentLevel).toBe(5)
     expect(s.zeroKnowledgeActive).toBe(true)

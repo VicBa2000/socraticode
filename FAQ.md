@@ -12,9 +12,14 @@ The fork tracks upstream closely — almost every line of the runtime, TUI, prov
 
 On the first launch, it asks you to pick 1–5. From there, every 5 turns it evaluates your signals:
 
-- **Downgrade** if: 3+ wrong answers in a window, 2+ "I don't know" signals, explicit slow-down request.
-- **Upgrade** if: 3+ correct answers + technical vocabulary used OR proposed solution without help.
+- **Downgrade** if: 3+ wrong answers in a window, 2+ "I don't know" signals, explicit slow-down request. Downgrades are not gated by extra filters — being stuck above your level is worse than a false demotion, which you can always correct with `/level`.
+- **Upgrade** — gated. First the simple signal must fire: 3+ correct answers + technical vocabulary used OR proposed solution without help. Then three quality filters run over the recent evaluated turns across sessions:
+  - **Enough correct in window by level**: L1 10/12, L2 7/9, L3/L4 5/7.
+  - **Weighted average ≥ 0.5**: each correct weighs `(5 − hintLevel) / 5`, adjusted by the per-turn `readiness` signal the model emits (`above` = +0.25, `below` = −0.25, capped to [0, 1]). A streak of correct answers under hint=5 scores 0.0 — scaffold obedience, not mastery, does not promote.
+  - **Topic diversity ≥ ceil(needed/2)**: can't graduate by nailing the same topic repeatedly.
+  - **Depth diversity floor**: at least half the correct turns must be under low hint (≤ 2). Prevents auto-promotion when the model is being generous with help.
 - **Copy-paste detected**: blocks all upgrades (no free promotions for pasted answers).
+- **Pre-upgrade anti-adulation guard**: whenever an upgrade is evaluated (pass or block), the next turn's prompt reminds the model to judge on substance, not tone — a vague answer is a fail, not a pass.
 
 You can force a level with `/level 3` (persists 5 sessions, then auto-readjusts) or lock it forever with `/level 3` repeatedly.
 

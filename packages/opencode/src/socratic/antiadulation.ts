@@ -218,6 +218,30 @@ export namespace AntiAdulation {
     ].join("\n")
   }
 
+  // ── Pre-upgrade Guard (one-shot) ─────────────────────────
+
+  /**
+   * One-turn anti-adulation nudge injected while the calibration engine is
+   * evaluating whether the user is ready for a higher level.
+   *
+   * The model is BOTH the judge (emits `correct` and `readiness` in HINT_META)
+   * and the generator of pleasing responses — a bias toward optimism translates
+   * directly into a false promotion. This directive asks the model to err
+   * toward strictness for the turn it is about to judge.
+   */
+  export function getPreUpgradeGuardDirective(): string {
+    return [
+      "── PRE-UPGRADE GUARD (one turn) ──",
+      "The calibration engine is evaluating whether to raise the user's level.",
+      "For THIS turn, judge the user's answer on SUBSTANCE, not tone or confidence.",
+      "- A vague, partial, or hand-wavy answer is `correct=false`, not true.",
+      "- A confident-sounding guess is `correct=false`.",
+      "- When in doubt, prefer `correct=false` and `readiness=\"below\"`.",
+      "- Do NOT soften the grade to be encouraging — an inflated pass here",
+      "  promotes the user to a level they are not ready for.",
+    ].join("\n")
+  }
+
   // ── Praise Filter ────────────────────────────────────────
 
   const PRAISE_PATTERNS = [

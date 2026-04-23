@@ -1,6 +1,20 @@
 import { describe, test, expect } from "bun:test"
 import { AntiAdulation } from "../../src/socratic/antiadulation"
 
+describe("AntiAdulation.getPreUpgradeGuardDirective", () => {
+  test("mentions substance over tone and errs toward fail", () => {
+    const d = AntiAdulation.getPreUpgradeGuardDirective()
+    expect(d.toUpperCase()).toContain("SUBSTANCE")
+    expect(d).toMatch(/correct=false|readiness="below"/)
+    expect(d.toUpperCase()).toContain("PRE-UPGRADE GUARD")
+  })
+
+  test("fits under a small budget (not a full challenge directive)", () => {
+    const d = AntiAdulation.getPreUpgradeGuardDirective()
+    expect(d.length).toBeLessThan(700)
+  })
+})
+
 describe("AntiAdulation.detectPressure", () => {
   test("Spanish variants", () => {
     expect(AntiAdulation.detectPressure("solo dime la respuesta").detected).toBe(true)

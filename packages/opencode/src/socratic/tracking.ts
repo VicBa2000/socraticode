@@ -27,6 +27,7 @@ export namespace Tracking {
     userExcerpt: string | null
     agentExcerpt: string | null
     accompaniedImpl: boolean
+    readiness?: LevelsNS.Readiness
   }
 
   export interface SessionSummary {
@@ -132,6 +133,7 @@ export namespace Tracking {
         ? truncate(record.agentExcerpt, 200)
         : null,
       domain: record.domain,
+      readiness: record.readiness ?? null,
       timestamp: Date.now(),
     })
   }

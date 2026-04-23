@@ -353,13 +353,14 @@ RULES FOR EXPERT:
 
   const METADATA_REMINDER = `MANDATORY METADATA:
 Every response MUST end with exactly this line (it is stripped automatically, the user does not see it):
-[HINT_META:{"correct":BOOL,"topic":"TOPIC","domain":"DOMAIN","level":"PERCEIVED_LEVEL"}]
+[HINT_META:{"correct":BOOL,"topic":"TOPIC","domain":"DOMAIN","level":"PERCEIVED_LEVEL","readiness":"READINESS"}]
 
 Where:
 - correct: true if the user demonstrated understanding, false if not, null if not applicable
 - topic: main topic of the interaction
 - domain: domain of the topic (fundamentos|lenguajes|paradigmas|web|backend|infraestructura|avanzado)
-- level: level you PERCEIVE the user to be at in this interaction (1-5)`
+- level: level you PERCEIVE the user to be at in this interaction (1-5)
+- readiness: "above" if the user answered clearly above their current level, "at" if at level, "below" if below, or null if not applicable. Used by the calibration engine to avoid false promotions — be honest.`
 
   // ── Default Context ──────────────────────────────────────
 

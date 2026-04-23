@@ -52,7 +52,7 @@ cd packages/opencode
 bun test test/socratic/
 ```
 
-All 341 socratic tests should pass. If your JSON change breaks a test, either the test needs updating (if your change is deliberate) or the JSON has an issue.
+All 380 socratic tests should pass. If your JSON change breaks a test, either the test needs updating (if your change is deliberate) or the JSON has an issue.
 
 ---
 

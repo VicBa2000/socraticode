@@ -210,7 +210,39 @@ export namespace Calibration {
       currentLevel = profile.global_level
     }
 
-    const result = Levels.evaluateAdjustment(currentLevel, signals)
+    const rawResult = Levels.evaluateAdjustment(currentLevel, signals)
+
+    // Apply upgrade quality filters (weighted avg + topic diversity + depth
+    // diversity). Only gates upgrades — downgrades pass through unchanged.
+    let result = rawResult
+    if (rawResult.changed && rawResult.newLevel > currentLevel) {
+      const clampedCurrent = Levels.clampLevel(currentLevel)
+      const recent = SocraticDB.getRecentEvaluatedTurns(
+        Levels.CALIBRATION_UP_BY_LEVEL[clampedCurrent].window + 5,
+      )
+      const turnsForFilter: Levels.TurnForFilter[] = recent.map((r) => ({
+        hintLevel: r.hint_level,
+        correct: r.correct === null ? null : r.correct === 1,
+        topic: r.topic,
+        readiness:
+          r.readiness === "above" || r.readiness === "at" || r.readiness === "below"
+            ? r.readiness
+            : null,
+      }))
+      const filters = Levels.evaluateUpgradeFilters(clampedCurrent, turnsForFilter)
+      if (!filters.passed) {
+        result = {
+          newLevel: clampedCurrent,
+          changed: false,
+          reason: `upgrade blocked (${filters.reason})`,
+        }
+      } else {
+        result = {
+          ...rawResult,
+          reason: `${rawResult.reason ?? "upgrade"} [filters: ${filters.reason}]`,
+        }
+      }
+    }
 
     if (result.changed) {
       if (domain) {

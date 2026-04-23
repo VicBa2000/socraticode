@@ -103,14 +103,43 @@ export namespace Interceptor {
     userLevel: LevelsNS.UserLevel,
     mode: ModesNS.Mode,
   ): string | null {
-    if (userLevel <= 2) {
+    // Level 1 HARD block — numeric limits + 4-phase protocol. These are the
+    // non-negotiables a novice needs to prevent runaway codegen that outpaces
+    // comprehension. Model compliance only — opencode's tool layer does not
+    // pre-approve tool calls, so enforcement is the model following this block.
+    if (userLevel === 1) {
       return [
-        "CODE WRITING RULE:",
+        "── LEVEL 1 HARD LIMITS (critical, not optional) ──",
+        "DO NOT call Write / Edit / MultiEdit until the user has EXPLICITLY approved",
+        "your plan IN THIS TURN. Approval from past turns DOES NOT COUNT — re-confirm.",
+        "MAX 30 lines of code per response. MAX 1 file touched.",
+        "",
+        "BEFORE any code, your response MUST contain (in order):",
+        "  (1) RESTATE: reformulate the user's request in your own words.",
+        "  (2) PLAN: 3-6 bullets, each with file + estimated line count.",
+        "  (3) TEACH: explain the prerequisite concept with an analogy, no code yet.",
+        "  (4) ASK: ONE comprehension question (not preference). Then END the turn.",
+        "      No tool calls this turn.",
+        "",
+        "Comprehension questions — GOOD vs BAD:",
+        "  GOOD: \"Why do we pick X and not Y?\" / \"If we change A to B, what breaks?\"",
+        "        \"Explain in your own words what this function will do.\"",
+        "  BAD:  \"Does that make sense?\" / \"Any questions?\" / \"A or B?\"",
+        "",
+        "Override handling:",
+        "  If the user says \"just write it\" / \"I already know this\" / \"stop asking\":",
+        "  acknowledge in ONE line, proceed this turn only, then suggest /level 3.",
+      ].join("\n")
+    }
+
+    if (userLevel === 2) {
+      return [
+        "CODE WRITING RULE (Basic):",
         "When you use the Write or Edit tools:",
-        "- ALWAYS explain what you will write BEFORE doing it.",
-        "- Comment the key lines as you write.",
-        "- Ask ONE verification question AFTER each file.",
-        "- If the user doesn't understand, reformulate before continuing.",
+        "- Explain the WHY behind non-trivial decisions BEFORE the code.",
+        "- Block-by-block, NOT line-by-line.",
+        "- ONE verification question per new concept (not per file).",
+        "- Do not re-teach vocabulary the user has used correctly this session.",
       ].join("\n")
     }
 

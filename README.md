@@ -7,9 +7,9 @@
 </div>
 <p align="center">An adaptive, socratic fork of <a href="https://github.com/anomalyco/opencode">OpenCode</a> that teaches you to code instead of coding for you.</p>
 <p align="center">
-  <a href="https://github.com/VicBa2000/socraticode/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-345%20passing-brightgreen?style=flat-square" /></a>
+  <a href="https://github.com/VicBa2000/socraticode/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-380%20passing-brightgreen?style=flat-square" /></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" /></a>
-  <a href="https://github.com/VicBa2000/socraticode/releases"><img alt="Version" src="https://img.shields.io/badge/version-1.0.0-orange?style=flat-square" /></a>
+  <a href="https://github.com/VicBa2000/socraticode/releases"><img alt="Version" src="https://img.shields.io/badge/version-1.1.0-orange?style=flat-square" /></a>
   <a href="https://github.com/anomalyco/opencode"><img alt="Forked from" src="https://img.shields.io/badge/forked%20from-OpenCode-purple?style=flat-square" /></a>
 </p>
 
@@ -72,13 +72,15 @@ Five user levels with distinct mentor roles:
 
 | Level | Role | Behavior |
 |------:|------|----------|
-| 1 | Teacher | Explains every concept before using it. 100% accompanied. |
+| 1 | Teacher | Explains every concept before using it. 100% accompanied. Hard limits: MAX 30 lines of code, MAX 1 file, restate → plan → teach → ask, no Write/Edit without in-turn approval. |
 | 2 | Guide | Teaches the WHY behind each decision. |
 | 3 | Pair programmer | Asks your approach first. Uses gapped code (`___`). |
 | 4 | Code reviewer | Challenges architecture, edge cases, security. |
 | 5 | Silent colleague | Works like a normal assistant. Intervenes only on serious issues. |
 
-Plus: 6-level hint escalation (0-5), learn/productive modes, Leitner spaced repetition (1/3/7/14 days), prerequisite enforcement, Feynman teach mode, personal anti-pattern library, session journal with weekly/monthly rollups, and ~70 topic-prerequisite relations — all hardcoded, all deterministic.
+Plus: 6-level hint escalation (0-5) smoothed per level so mid-tier users start at analogy/orientation instead of cold silence, learn/productive modes, Leitner spaced repetition (1/3/7/14 days), prerequisite enforcement, Feynman teach mode, personal anti-pattern library, session journal with weekly/monthly rollups, and ~70 topic-prerequisite relations — all hardcoded, all deterministic.
+
+**Upgrade quality filters (v1.1).** Level-ups are no longer granted on sheer correct count. A promotion now requires (a) enough correct answers in the recent window by level (L1 10/12, L2 7/9, L3/L4 5/7), (b) weighted average ≥ 0.5 so answers given under heavy scaffolding count for less, and (c) depth diversity — at least half the correct turns must be under low hint (≤ 2). The model also emits a per-turn `readiness` signal (`above` / `at` / `below`) that adjusts the weight. Downgrades skip the filters — being stuck above your level is worse than a false demotion.
 
 ### Slash commands
 

@@ -226,7 +226,7 @@ FULL DOCUMENTATION
   manual.txt          Complete user manual
   README.md           Overview and diff with OpenCode
   FAQ.md              Frequently asked questions
-  CHANGELOG.md        v1.0 feature list
+  CHANGELOG.md        Full release changelog
   CONTRIBUTING.md     How to contribute (JSON data edits)
 
 

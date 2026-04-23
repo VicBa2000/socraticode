@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from "bun:test"
 import { Calibration } from "../../src/socratic/calibration"
 import { SocraticDB } from "../../src/socratic/db"
-import { resetSocraticDB } from "./_helpers"
+import { resetSocraticDB, seedTurns } from "./_helpers"
 
 beforeEach(() => {
   resetSocraticDB()
@@ -132,8 +132,10 @@ describe("Calibration.applyContinuousCalibration", () => {
     expect(after).toBeGreaterThan(before)
   })
 
-  test("level up writes new global level when no domain", () => {
+  test("level up writes new global level when no domain (filters pass)", () => {
     Calibration.completeInitialCalibration(2)
+    // L2 upgrade needs 7/9 correct with topic diversity ≥4 and lowHint count ≥4
+    seedTurns({ count: 9, userLevel: 2 })
     const r = Calibration.applyContinuousCalibration(
       {
         correctAnswers: 3,
@@ -150,9 +152,10 @@ describe("Calibration.applyContinuousCalibration", () => {
     expect(SocraticDB.getProfile()!.global_level).toBe(3)
   })
 
-  test("level adjustment on domain writes domain level only", () => {
+  test("level adjustment on domain writes domain level only (filters pass)", () => {
     Calibration.completeInitialCalibration(2)
     Calibration.calibrateDomain("web", 2)
+    seedTurns({ count: 9, userLevel: 2, domain: "web" })
     Calibration.applyContinuousCalibration(
       {
         correctAnswers: 3,
@@ -168,5 +171,138 @@ describe("Calibration.applyContinuousCalibration", () => {
     expect(SocraticDB.getDomainLevel("web")!.level).toBe(3)
     // Global level unchanged
     expect(SocraticDB.getProfile()!.global_level).toBe(2)
+  })
+
+  test("upgrade blocked when recent DB history is all high-hint (obedience, not mastery)", () => {
+    Calibration.completeInitialCalibration(2)
+    // 9 correct but ALL under hint=5 — classic "scaffold obedience" pattern
+    seedTurns({ count: 9, userLevel: 2, hintLevel: 5 })
+    const r = Calibration.applyContinuousCalibration(
+      {
+        correctAnswers: 3,
+        incorrectAnswers: 0,
+        zeroKnowledgeSignals: 0,
+        technicalTermsUsed: true,
+        proposedSolutionWithoutHelp: true,
+        requestedSlowDown: false,
+        copyPasteDetected: false,
+      },
+      null,
+    )
+    expect(r.changed).toBe(false)
+    expect(r.reason).toMatch(/upgrade blocked/)
+    expect(SocraticDB.getProfile()!.global_level).toBe(2)
+  })
+
+  test("upgrade blocked when all correct are the same topic (no breadth)", () => {
+    Calibration.completeInitialCalibration(2)
+    // 9 correct, all on the same topic — no topic diversity
+    seedTurns({ count: 9, userLevel: 2, topic: "closures" })
+    const r = Calibration.applyContinuousCalibration(
+      {
+        correctAnswers: 3,
+        incorrectAnswers: 0,
+        zeroKnowledgeSignals: 0,
+        technicalTermsUsed: true,
+        proposedSolutionWithoutHelp: true,
+        requestedSlowDown: false,
+        copyPasteDetected: false,
+      },
+      null,
+    )
+    expect(r.changed).toBe(false)
+    expect(r.reason).toMatch(/upgrade blocked/)
+  })
+
+  test("upgrade blocked when DB has not accumulated enough evaluated turns", () => {
+    Calibration.completeInitialCalibration(2)
+    // L2 needs window=9 with 7 correct — only 5 exist
+    seedTurns({ count: 5, userLevel: 2 })
+    const r = Calibration.applyContinuousCalibration(
+      {
+        correctAnswers: 3,
+        incorrectAnswers: 0,
+        zeroKnowledgeSignals: 0,
+        technicalTermsUsed: true,
+        proposedSolutionWithoutHelp: true,
+        requestedSlowDown: false,
+        copyPasteDetected: false,
+      },
+      null,
+    )
+    expect(r.changed).toBe(false)
+  })
+
+  test("readiness='above' persisted in DB boosts the weighted avg enough to pass a marginal case", () => {
+    // Simulate L2 user who answered 7 of 9 correctly all at hint=2 (weight=0.6)
+    // but all flagged readiness='above' → weight becomes 0.85. Without readiness
+    // the case is passing anyway; this test locks the persistence contract by
+    // asserting the filter sees the readiness signal from DB.
+    Calibration.completeInitialCalibration(2)
+    seedTurns({
+      count: 9,
+      userLevel: 2,
+      hintLevel: 2,
+      readiness: "above",
+    })
+    const r = Calibration.applyContinuousCalibration(
+      {
+        correctAnswers: 3,
+        incorrectAnswers: 0,
+        zeroKnowledgeSignals: 0,
+        technicalTermsUsed: true,
+        proposedSolutionWithoutHelp: true,
+        requestedSlowDown: false,
+        copyPasteDetected: false,
+      },
+      null,
+    )
+    expect(r.changed).toBe(true)
+    // Reason string should surface the filter metrics
+    expect(r.reason).toMatch(/weighted=0\.[89]/)
+  })
+
+  test("readiness='below' persisted in DB blocks an otherwise-passing upgrade", () => {
+    Calibration.completeInitialCalibration(2)
+    // hint=2 (weight=0.6), readiness='below' (-0.25) → 0.35 < 0.5
+    seedTurns({
+      count: 9,
+      userLevel: 2,
+      hintLevel: 2,
+      readiness: "below",
+    })
+    const r = Calibration.applyContinuousCalibration(
+      {
+        correctAnswers: 3,
+        incorrectAnswers: 0,
+        zeroKnowledgeSignals: 0,
+        technicalTermsUsed: true,
+        proposedSolutionWithoutHelp: true,
+        requestedSlowDown: false,
+        copyPasteDetected: false,
+      },
+      null,
+    )
+    expect(r.changed).toBe(false)
+    expect(r.reason).toMatch(/upgrade blocked/)
+  })
+
+  test("downgrade is NOT gated by upgrade filters", () => {
+    Calibration.completeInitialCalibration(3)
+    // No seeded turns at all — filter would block an upgrade, but this is a downgrade
+    const r = Calibration.applyContinuousCalibration(
+      {
+        correctAnswers: 0,
+        incorrectAnswers: 3,
+        zeroKnowledgeSignals: 0,
+        technicalTermsUsed: false,
+        proposedSolutionWithoutHelp: false,
+        requestedSlowDown: false,
+        copyPasteDetected: false,
+      },
+      null,
+    )
+    expect(r.changed).toBe(true)
+    expect(r.newLevel).toBe(2)
   })
 })
