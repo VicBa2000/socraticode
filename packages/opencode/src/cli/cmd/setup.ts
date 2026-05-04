@@ -233,17 +233,26 @@ export const SetupCommand = cmd({
 
     const providerId = source === "cloud" ? "ollama-cloud" : "ollama"
 
+    const mergedDisabled = Array.from(
+      new Set([...(existingConfig.disabled_providers ?? []), "opencode"]),
+    )
+
     const newConfig = {
       ...existingConfig,
       provider: providerConfig,
-      model: `${providerId}/${defaultModel}`,
-      disabled_providers: ["opencode"],
+      model: existingConfig.model ?? `${providerId}/${defaultModel}`,
+      disabled_providers: mergedDisabled,
     }
 
     const configPath = saveConfig(newConfig)
 
     prompts.log.success(`Config saved to: ${configPath}`)
-    prompts.log.info(`Main model: ${providerId}/${defaultModel}`)
+    if (existingConfig.model && existingConfig.model !== `${providerId}/${defaultModel}`) {
+      prompts.log.info(`Main model kept: ${existingConfig.model} (Ollama added as alternative)`)
+      prompts.log.info(`To switch, set "model": "${providerId}/${defaultModel}" in the config or pick it in the TUI.`)
+    } else {
+      prompts.log.info(`Main model: ${providerId}/${defaultModel}`)
+    }
     prompts.log.info(`Provider "opencode" disabled (we use Ollama)`)
     prompts.log.info(`To add more models later, edit "provider.${providerId}.models" in the config file.`)
     prompts.log.info(`To start: socraticode  (or 'bun run dev')`)
